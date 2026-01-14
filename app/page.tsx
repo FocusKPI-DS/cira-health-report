@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import styles from './page.module.css'
+import Header from '@/components/Header'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
 import { LightningIcon, RobotIcon, ChartIcon, ClipboardIcon, TagIcon, RefreshIcon, CheckIcon } from '@/components/Icons'
 
@@ -26,19 +26,7 @@ export default function Home() {
 
   return (
     <main className={styles.main}>
-      <div className={styles.navbar}>
-        <div className={styles.navContainer}>
-          <Link href="/" className={styles.logo}>Cira Health</Link>
-          <div className={styles.navActions}>
-            <button className={styles.enterpriseButton} onClick={() => {}}>
-              Go to Enterprise Version
-            </button>
-            <button className={styles.loginButton} onClick={handleLogin}>
-              Login / Sign Up
-            </button>
-          </div>
-        </div>
-      </div>
+      <Header showAuthButtons={true} />
       <div className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.badge}>Powered by focuskpi</div>

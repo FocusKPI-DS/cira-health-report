@@ -2,12 +2,11 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import styles from './page.module.css'
+import Header from '@/components/Header'
 import SignInModal from '@/components/SignInModal'
 import PaymentModal from '@/components/PaymentModal'
 import PHADetailsModal from '@/components/PHADetailsModal'
-import UserMenu from '@/components/UserMenu'
 import GenerateWorkflowModal from '@/components/GenerateWorkflowModal'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
 import { InfoIcon, DownloadIcon } from '@/components/Icons'
@@ -202,31 +201,7 @@ function ResultsContent() {
 
   return (
     <main className={styles.main}>
-      <div className={styles.navbar}>
-        <div className={styles.navContainer}>
-          <Link href="/" className={styles.logo}>Cira Health</Link>
-          <div className={styles.navActions}>
-            {isLoggedIn ? (
-              <UserMenu />
-            ) : (
-              <>
-                <button 
-                  className={styles.enterpriseButton}
-                  onClick={() => {}}
-                >
-                  Go to Enterprise Version
-                </button>
-                <button 
-                  className={styles.loginButton}
-                  onClick={() => router.push('/login')}
-                >
-                  Login / Sign Up
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      <Header showAuthButtons={!isLoggedIn} showUserMenu={isLoggedIn} />
       <div className={styles.pageContent}>
         {isLoggedIn && (
           <div className={styles.sidebarWrapper}>

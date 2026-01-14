@@ -2,8 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import styles from './page.module.css'
+import Header from '@/components/Header'
 import { PlusIcon } from '@/components/Icons'
 
 interface SimilarProduct {
@@ -215,25 +215,7 @@ function SimilarProductsContent() {
 
   return (
     <main className={styles.main}>
-      <div className={styles.navbar}>
-        <div className={styles.navContainer}>
-          <Link href="/" className={styles.logo}>Cira Health</Link>
-          <div className={styles.navActions}>
-            <button 
-              className={styles.enterpriseButton}
-              onClick={() => {}}
-            >
-              Go to Enterprise Version
-            </button>
-            <button 
-              className={styles.loginButton}
-              onClick={() => router.push('/login')}
-            >
-              Login / Sign Up
-            </button>
-          </div>
-        </div>
-      </div>
+      <Header showAuthButtons={true} />
 
       <div className={styles.container}>
         <div className={styles.header}>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import styles from './page.module.css'
-import UserMenu from '@/components/UserMenu'
+import Header from '@/components/Header'
 import { DownloadIcon } from '@/components/Icons'
 
 interface Invoice {
@@ -105,14 +105,7 @@ export default function InvoicesPage() {
 
   return (
     <main className={styles.main}>
-      <div className={styles.navbar}>
-        <div className={styles.navContainer}>
-          <Link href="/" className={styles.logo}>Cira Health</Link>
-          <div className={styles.navActions}>
-            <UserMenu />
-          </div>
-        </div>
-      </div>
+      <Header showUserMenu={true} />
       <div className={styles.container}>
         <div className={styles.header}>
           <div>
