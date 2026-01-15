@@ -245,5 +245,28 @@ export const analysisApi = {
   async fetchTransformedResults(analysisId: string, page: number = 1, pageSize: number = 20): Promise<HazardData[]> {
     const results = await this.getAnalysisResults(analysisId, page, pageSize)
     return transformAnalysisResults(results)
+  },
+
+  /**
+   * Fetch the list of completed analyses for the current user
+   * @returns List of analysis reports
+   */
+  async fetchReportList(): Promise<any[]> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_URL}/api/v1/anonclient/analysis-results-list`,
+      {
+        method: 'GET',
+        headers,
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to fetch report list' }))
+      throw new Error(error.detail || 'Failed to fetch report list')
+    }
+    
+    const data = await response.json()
+    return data.analyses || []
   }
 }

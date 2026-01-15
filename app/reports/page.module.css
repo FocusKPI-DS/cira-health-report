@@ -63,11 +63,66 @@
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 2rem;
   position: relative;
   z-index: 1;
+}
+
+.splitLayout {
+  display: flex;
+  gap: 1rem;
+  min-height: calc(100vh - 8rem);
+  position: relative;
+}
+
+.leftPanel {
+  background: white;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(14, 165, 233, 0.1);
+  padding: 2rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 8rem);
+  flex-shrink: 0;
+}
+
+.resizer {
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.resizer:hover {
+  background: rgba(14, 165, 233, 0.2);
+}
+
+.resizer::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 40px;
+  background: rgba(14, 165, 233, 0.3);
+  border-radius: 2px;
+}
+
+.rightPanel {
+  background: white;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(14, 165, 233, 0.1);
+  padding: 2rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 8rem);
+  flex: 1;
+  min-width: 0;
 }
 
 .contentCard {
@@ -180,20 +235,28 @@
 
 .reportCard {
   display: flex;
+  flex-direction: row;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 2rem;
+  align-items: center;
+  gap: 1rem;
   padding: 1.5rem;
   background: #f8fafc;
-  border: 1px solid rgba(14, 165, 233, 0.1);
+  border: 2px solid rgba(14, 165, 233, 0.1);
   border-radius: 6px;
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .reportCard:hover {
   background: rgba(14, 165, 233, 0.05);
   border-color: rgba(14, 165, 233, 0.3);
   transform: translateX(4px);
+}
+
+.reportCardActive {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: #0ea5e9;
+  border-width: 2px;
 }
 
 .reportContent {
@@ -238,6 +301,124 @@
   gap: 0.75rem;
   align-items: center;
   flex-shrink: 0;
+}
+
+.emptyDetails {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #64748b;
+  font-size: 1.125rem;
+  text-align: center;
+}
+
+.reportDetails {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.detailsHeader {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.detailsTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.detailsIntendedUse {
+  font-size: 1rem;
+  color: #475569;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tableContainer {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid rgba(14, 165, 233, 0.1);
+  border-radius: 6px;
+}
+
+.tableInfo {
+  padding: 0.75rem 1rem;
+  background: rgba(14, 165, 233, 0.05);
+  border-bottom: 1px solid rgba(14, 165, 233, 0.1);
+  color: #0ea5e9;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.th {
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-align: left;
+  padding: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tr {
+  border-bottom: 1px solid rgba(14, 165, 233, 0.1);
+  transition: background-color 0.2s ease;
+}
+
+.tr:hover {
+  background-color: rgba(14, 165, 233, 0.05);
+}
+
+.td {
+  padding: 1rem;
+  color: #334155;
+  font-size: 0.95rem;
+  vertical-align: top;
+}
+
+.severityBadge {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.negligible {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.minor {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.moderate {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.critical {
+  background: #fecaca;
+  color: #991b1b;
 }
 
 .viewButton {
@@ -321,12 +502,27 @@
     gap: 0.75rem;
   }
 
-  .navActions {
-    gap: 1rem;
-  }
-
   .container {
     padding: 1.5rem;
+  }
+
+  .splitLayout {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .leftPanel {
+    width: 100% !important;
+    max-height: none;
+  }
+
+  .resizer {
+    display: none;
+  }
+
+  .rightPanel {
+    max-height: none;
+    margin-left: 0;
   }
 
   .title {
@@ -334,8 +530,6 @@
   }
 
   .reportCard {
-    flex-direction: column;
-    align-items: flex-start;
     gap: 1rem;
   }
 
@@ -350,10 +544,10 @@
     justify-content: center;
   }
 
-  .reportHeader {
+  .header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 1rem;
   }
 }
 

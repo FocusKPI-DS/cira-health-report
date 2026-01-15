@@ -19,43 +19,29 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
     router.push('/login')
   }
 
-  // Don't show buttons while loading
-  if (loading) {
-    return (
-      <div className={styles.navbar}>
-        <div className={styles.navContainer}>
-          <Link href="/" className={styles.logo}>Cira Health</Link>
-          <div className={styles.navActions}></div>
-        </div>
-      </div>
-    )
-  }
-
   // Determine what to show based on auth state and props
-  const shouldShowUserMenu = showUserMenu && user && !isAnonymous
-  const shouldShowAuthButtons = showAuthButtons && (!user || isAnonymous)
+  const shouldShowUserMenu = showUserMenu && user && !isAnonymous && !loading
+  const shouldShowAuthButtons = showAuthButtons && (!user || isAnonymous) && !loading
 
   return (
     <div className={styles.navbar}>
       <div className={styles.navContainer}>
         <Link href="/" className={styles.logo}>Cira Health</Link>
         <div className={styles.navActions}>
-          {shouldShowUserMenu ? (
-            <UserMenu />
-          ) : shouldShowAuthButtons ? (
-            <>
-              <span className={styles.userStatus}>
-                {isAnonymous ? '👤 匿名用户' : `✓ 已登录,Email=${user?.email}`}
-                {currentTeamId && ` | team_id: ${currentTeamId}`}
-              </span>
-              <button className={styles.enterpriseButton} onClick={() => {}}>
-                Go to Enterprise Version
-              </button>
-              <button className={styles.loginButton} onClick={handleLogin}>
-                {isAnonymous ? 'Bind Account' : 'Login / Sign Up'}
-              </button>
-            </>
-          ) : null}
+          {shouldShowUserMenu && <UserMenu />}
+          {shouldShowAuthButtons && (
+            <span className={styles.userStatus}>
+              {isAnonymous ? '👤 匿名用户' : `✓ 已登录,Email=${user?.email}`}
+              {currentTeamId && ` | team_id: ${currentTeamId}`}
+            </span>
+          )}
+          {/* These buttons always show, regardless of auth state */}
+          <button className={styles.enterpriseButton} onClick={() => {}}>
+            Go to Enterprise Version
+          </button>
+          <button className={styles.loginButton} onClick={handleLogin}>
+            {loading ? 'Loading...' : (isAnonymous ? 'Bind Account' : 'Login / Sign Up')}
+          </button>
         </div>
       </div>
     </div>

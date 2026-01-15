@@ -21,6 +21,11 @@
   gap: 1.5rem;
   width: 380px;
   flex-shrink: 0;
+  transition: width 0.3s ease;
+}
+
+.sidebarWrapperCollapsed {
+  width: 60px;
 }
 
 .navbar {
