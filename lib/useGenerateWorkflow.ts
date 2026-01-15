@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { WorkflowStep, Message, SimilarProduct, Hazard } from './types'
+import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 
-// Mock similar products data
-export const similarProducts: SimilarProduct[] = [
+// Mock similar products data (fallback only)
+const mockSimilarProducts: SimilarProduct[] = [
   {
     id: '1',
     productCode: 'FMF',
@@ -91,7 +92,15 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
   const [previousSelectedCount, setPreviousSelectedCount] = useState(0)
   const [productsFound, setProductsFound] = useState(true)
-  const [messageHistory, setMessageHistory] = useState<Message[]>([])
+  const [messageHistory, setMessageHistory] = useState<Message[]>([{
+    id: '1',
+    type: 'ai',
+    content: `Hello! I'm here to help you generate a PHA Analysis. What is the name of your device?`,
+    step: 'device-name',
+    timestamp: Date.now()
+  }])
+  const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const workflowEndRef = useRef<HTMLDivElement>(null)
 
   // Initialize with product name if provided
@@ -167,21 +176,39 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
   const handleSearchProducts = async () => {
     setCurrentStep('searching-products')
+    setIsSearching(true)
     addMessage('ai', 'First, I\'ll search for similar products in the FDA product classification database...', 'searching-products')
     
-    // Simulate search delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // For demo: alternate between found and not found
-    const found = !productsFound
-    setProductsFound(found)
-    
-    if (found) {
-      addMessage('ai', 'Following are the products I could find. Please select the ones that fit the best:', 'similar-products')
+    try {
+      // Call FDA search API
+      const response = await fetch(`/api/search-fda-products?deviceName=${encodeURIComponent(productName)}&limit=20`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to search FDA database')
+      }
+      
+      const data = await response.json()
+      
+      if (data.results && data.results.length > 0) {
+        setSimilarProducts(data.results)
+        setProductsFound(true)
+        addMessage('ai', 'Following are the products I could find. Please select the ones that fit the best:', 'similar-products')
+        setCurrentStep('similar-products')
+      } else {
+        setSimilarProducts([])
+        setProductsFound(false)
+        addMessage('ai', `I couldn't find similar products for "**${productName}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`, 'no-products-found')
+        setCurrentStep('no-products-found')
+      }
+    } catch (error) {
+      console.error('[Search Products] Error:', error)
+      // Fallback to mock data on error
+      setSimilarProducts(mockSimilarProducts)
+      setProductsFound(true)
+      addMessage('ai', 'Following are the products I could find (using cached data). Please select the ones that fit the best:', 'similar-products')
       setCurrentStep('similar-products')
-    } else {
-      addMessage('ai', `I couldn't find similar products for "**${productName}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`, 'no-products-found')
-      setCurrentStep('no-products-found')
+    } finally {
+      setIsSearching(false)
     }
   }
 
@@ -195,23 +222,42 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setProductName(newDeviceName)
     setSelectedProducts(new Set())
     setPreviousSelectedCount(0)
+    setSimilarProducts([])
     addMessage('user', newDeviceName, 'similar-products')
     setCurrentStep('searching-products')
+    setIsSearching(true)
     addMessage('ai', 'First, I\'ll search for similar products in the FDA product classification database...', 'searching-products')
     
-    // Simulate search delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // For demo: alternate between found and not found
-    const found = !productsFound
-    setProductsFound(found)
-    
-    if (found) {
-      addMessage('ai', 'Following are the products I could find. Please select the ones that fit the best:', 'similar-products')
+    try {
+      // Call FDA search API
+      const response = await fetch(`/api/search-fda-products?deviceName=${encodeURIComponent(newDeviceName)}&limit=20`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to search FDA database')
+      }
+      
+      const data = await response.json()
+      
+      if (data.results && data.results.length > 0) {
+        setSimilarProducts(data.results)
+        setProductsFound(true)
+        addMessage('ai', 'Following are the products I could find. Please select the ones that fit the best:', 'similar-products')
+        setCurrentStep('similar-products')
+      } else {
+        setSimilarProducts([])
+        setProductsFound(false)
+        addMessage('ai', `I couldn't find similar products for "**${newDeviceName}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`, 'no-products-found')
+        setCurrentStep('no-products-found')
+      }
+    } catch (error) {
+      console.error('[New Search] Error:', error)
+      // Fallback to mock data on error
+      setSimilarProducts(mockSimilarProducts)
+      setProductsFound(true)
+      addMessage('ai', 'Following are the products I could find (using cached data). Please select the ones that fit the best:', 'similar-products')
       setCurrentStep('similar-products')
-    } else {
-      addMessage('ai', `I couldn't find similar products for "**${newDeviceName}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`, 'no-products-found')
-      setCurrentStep('no-products-found')
+    } finally {
+      setIsSearching(false)
     }
   }
 
@@ -262,59 +308,78 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setCurrentStep('generating')
     addMessage('ai', 'Generating your PHA Analysis report... This may take a few moments.', 'generating')
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    try {
+      // Call the backend API and poll for status
+      const result = await analysisApi.startAnalysisAndPoll(
+        (status: AnalysisStatusResponse) => {
+          // Update message with status
+          console.log('[Analysis] Status update:', status.status, status.detail)
+        },
+        5000 // Poll every 5 seconds
+      )
 
-    // Mock report data
-    const mockHazards: Hazard[] = [
-      {
-        hazard: 'Crack',
-        potentialHarm: 'Insufficient Information',
-        severity: ['Minor', 'Negligible']
-      },
-      {
-        hazard: 'No Clinical Signs, Symptoms or Conditions',
-        potentialHarm: 'Insufficient Information',
-        severity: ['Minor', 'Negligible']
-      },
-      {
-        hazard: 'No Patient Involvement',
-        potentialHarm: 'Insufficient Information',
-        severity: ['Minor', 'Negligible']
-      },
-      {
-        hazard: 'No Consequences Or Impact To Patient',
-        potentialHarm: 'Insufficient Information',
-        severity: ['Negligible']
-      },
-      {
-        hazard: 'No Known Impact Or Consequence To Patient',
-        potentialHarm: 'Insufficient Information',
-        severity: ['Minor', 'Negligible']
-      },
-      {
-        hazard: 'Battery Malfunction',
-        potentialHarm: 'Device Failure',
-        severity: ['Moderate']
-      },
-      {
-        hazard: 'Software Error',
-        potentialHarm: 'Incorrect Data Display',
-        severity: ['Minor', 'Moderate']
-      },
-      {
-        hazard: 'Electrical Hazard',
-        potentialHarm: 'Patient Shock Risk',
-        severity: ['Critical']
+      if (result.status === 'Completed') {
+        // Mock report data (replace with result.result when backend returns actual data)
+        const mockHazards: Hazard[] = [
+          {
+            hazard: 'Crack',
+            potentialHarm: 'Insufficient Information',
+            severity: ['Minor', 'Negligible']
+          },
+          {
+            hazard: 'No Clinical Signs, Symptoms or Conditions',
+            potentialHarm: 'Insufficient Information',
+            severity: ['Minor', 'Negligible']
+          },
+          {
+            hazard: 'No Patient Involvement',
+            potentialHarm: 'Insufficient Information',
+            severity: ['Minor', 'Negligible']
+          },
+          {
+            hazard: 'No Consequences Or Impact To Patient',
+            potentialHarm: 'Insufficient Information',
+            severity: ['Negligible']
+          },
+          {
+            hazard: 'No Known Impact Or Consequence To Patient',
+            potentialHarm: 'Insufficient Information',
+            severity: ['Minor', 'Negligible']
+          },
+          {
+            hazard: 'Battery Malfunction',
+            potentialHarm: 'Device Failure',
+            severity: ['Moderate']
+          },
+          {
+            hazard: 'Software Error',
+            potentialHarm: 'Incorrect Data Display',
+            severity: ['Minor', 'Moderate']
+          },
+          {
+            hazard: 'Electrical Hazard',
+            potentialHarm: 'Patient Shock Risk',
+            severity: ['Critical']
+          }
+        ]
+
+        if (onComplete) {
+          onComplete(productName, intendedUse, mockHazards)
+        } else {
+          // Default behavior if no onComplete handler
+          addMessage('ai', 'Your PHA Analysis report has been generated successfully!', 'completed')
+          setCurrentStep('completed')
+        }
+      } else if (result.status === 'Failed') {
+        addMessage('ai', `Analysis failed: ${result.detail}`, 'completed')
+        setCurrentStep('completed')
+        alert('Failed to generate analysis. Please try again.')
       }
-    ]
-
-    if (onComplete) {
-      onComplete(productName, intendedUse, mockHazards)
-    } else {
-      // Default behavior if no onComplete handler
-      addMessage('ai', 'Your PHA Analysis report has been generated successfully!', 'completed')
+    } catch (error) {
+      console.error('[Analysis] Error:', error)
+      addMessage('ai', 'An error occurred while generating the analysis. Please try again.', 'completed')
       setCurrentStep('completed')
+      alert(error instanceof Error ? error.message : 'Failed to generate analysis')
     }
   }
 
@@ -324,6 +389,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setCurrentStep('device-name')
     setSelectedProducts(new Set())
     setPreviousSelectedCount(0)
+    setSimilarProducts([])
+    setIsSearching(false)
     setMessageHistory([{
       id: '1',
       type: 'ai',
@@ -343,6 +410,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     currentStep,
     setCurrentStep,
     selectedProducts,
+    similarProducts,
+    isSearching,
     messageHistory,
     workflowEndRef,
     

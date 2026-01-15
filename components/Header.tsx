@@ -13,7 +13,7 @@ interface HeaderProps {
 
 export default function Header({ showAuthButtons = true, showUserMenu = false }: HeaderProps) {
   const router = useRouter()
-  const { user, isAnonymous, loading } = useAuth()
+  const { user, isAnonymous, loading, currentTeamId } = useAuth()
 
   const handleLogin = () => {
     router.push('/login')
@@ -46,6 +46,7 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
             <>
               <span className={styles.userStatus}>
                 {isAnonymous ? '👤 匿名用户' : `✓ 已登录,Email=${user?.email}`}
+                {currentTeamId && ` | team_id: ${currentTeamId}`}
               </span>
               <button className={styles.enterpriseButton} onClick={() => {}}>
                 Go to Enterprise Version

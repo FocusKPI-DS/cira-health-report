@@ -72,6 +72,7 @@ function GenerateContent() {
           intendedUse={workflow.intendedUse}
           setIntendedUse={workflow.setIntendedUse}
           selectedProducts={workflow.selectedProducts}
+          similarProducts={workflow.similarProducts}
           workflowEndRef={workflow.workflowEndRef}
           handleDeviceNameSubmit={workflow.handleDeviceNameSubmit}
           handleIntendedUseAnswer={workflow.handleIntendedUseAnswer}

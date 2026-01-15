@@ -17,9 +17,10 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   isAnonymous: boolean
+  currentTeamId: string | null
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>
-  linkAnonymousAccount: (email: string, password: string, displayName?: string) => Promise<void>
+  linkAnonymousAccount: (email: string, password: string, displayName?: string) => Promise<User>
   logout: () => Promise<void>
 }
 
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAnonymous, setIsAnonymous] = useState(false)
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null)
 
   useEffect(() => {
     const auth = getFirebaseAuth()
@@ -39,6 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(firebaseUser)
         setIsAnonymous(firebaseUser.isAnonymous)
         console.log('用户已登录:', firebaseUser.isAnonymous ? '匿名用户' : firebaseUser.email, firebaseUser.uid)
+        
+        // Sync existing user with backend
+        await syncUserToBackend(firebaseUser)
+        const teamId = await syncUserToApphub(firebaseUser)
+        if (teamId) {
+          setCurrentTeamId(teamId)
+        }
+        
         setLoading(false)
       } else {
         // No user logged in, sign in anonymously
@@ -48,6 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('匿名登录成功:', result.user.uid)
           setUser(result.user)
           setIsAnonymous(true)
+          
+          // Sync anonymous user with backend
+          await syncUserToBackend(result.user)
+          const teamId = await syncUserToApphub(result.user)
+          if (teamId) {
+            setCurrentTeamId(teamId)
+          }
         } catch (error: any) {
           console.error('匿名登录失败:', error.message)
           setUser(null)
@@ -137,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         isAnonymous,
+        currentTeamId,
         signInWithEmail,
         signUpWithEmail,
         linkAnonymousAccount,
@@ -155,6 +173,125 @@ export function useAuth() {
   }
   return context
 }
+
+// Helper function to sync user with backend
+async function syncUserToBackend(firebaseUser: User) {
+  try {
+    // Get Firebase ID token
+    let idToken: string
+    try {
+      idToken = await firebaseUser.getIdToken(true) // Force refresh to ensure valid token
+    } catch (tokenError) {
+      console.error('Unable to get authentication token:', tokenError)
+      return
+    }
+
+    // Sync user with backend
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+    
+    // Wait 1 second before syncing
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    let syncResponse: Response
+    try {
+      syncResponse = await fetch(`${apiUrl}/auth/sync-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+      })
+    } catch (fetchError) {
+      console.error('Network error syncing user:', fetchError)
+      return
+    }
+
+    if (!syncResponse.ok) {
+      const errorData = await syncResponse.json().catch(() => ({ detail: 'Failed to sync user' }))
+      const errorDetail = errorData.detail || 'Failed to sync user with backend'
+      
+      if (syncResponse.status === 401 || syncResponse.status === 403) {
+        console.error('Authentication error:', errorDetail)
+        return
+      }
+      
+      console.error('Sync error:', errorDetail)
+      return
+    }
+
+    const syncResult = await syncResponse.json()
+    
+    if (!syncResult.success) {
+      console.error('User sync failed:', syncResult)
+      return
+    }
+
+    console.log('User synced successfully with backend')
+  } catch (error) {
+    console.error('Sync user error:', error)
+    // Don't throw - allow login to continue even if sync fails
+  }
+}
+async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
+  try {
+    // Get Firebase ID token
+    let idToken: string
+    try {
+      idToken = await firebaseUser.getIdToken(true) // Force refresh to ensure valid token
+    } catch (tokenError) {
+      console.error('Unable to get authentication token:', tokenError)
+      return null
+    }
+
+    // Sync user with backend
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+    
+    // Wait 1 second before syncing
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    let syncResponse: Response
+    try {
+      syncResponse = await fetch(`${apiUrl}/api/v1/anonclient/initAnonymousUser`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+      })
+    } catch (fetchError) {
+      console.error('Network error syncing user:', fetchError)
+      return null
+    }
+
+    if (!syncResponse.ok) {
+      const errorData = await syncResponse.json().catch(() => ({ detail: 'Failed to sync user' }))
+      const errorDetail = errorData.detail || 'Failed to sync user with backend'
+      
+      if (syncResponse.status === 401 || syncResponse.status === 403) {
+        console.error('Authentication error:', errorDetail)
+        return null
+      }
+      
+      console.error('Sync error:', errorDetail)
+      return null
+    }
+
+    const syncResult = await syncResponse.json()
+    
+    if (!syncResult.success) {
+      console.error('User sync failed:', syncResult)
+      return null
+    }
+
+    console.log('User synced successfully with apphub backend')
+    return syncResult.team_id || null
+  } catch (error) {
+    console.error('Sync user error:', error)
+    // Don't throw - allow login to continue even if sync fails
+    return null
+  }
+}
+  
 
 // Helper function to call backend API for data migration
 async function migrateUserData(anonymousUid: string, authenticatedUid: string) {

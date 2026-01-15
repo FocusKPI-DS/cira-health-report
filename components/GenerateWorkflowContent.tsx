@@ -1,7 +1,6 @@
 'use client'
 
-import { Message, WorkflowStep } from '@/lib/types'
-import { similarProducts } from '@/lib/useGenerateWorkflow'
+import { Message, WorkflowStep, SimilarProduct } from '@/lib/types'
 
 interface GenerateWorkflowContentProps {
   messageHistory: Message[]
@@ -11,6 +10,7 @@ interface GenerateWorkflowContentProps {
   intendedUse: string
   setIntendedUse: (use: string) => void
   selectedProducts: Set<string>
+  similarProducts: SimilarProduct[]
   workflowEndRef: React.RefObject<HTMLDivElement | null>
   handleDeviceNameSubmit: (e: React.FormEvent) => void
   handleIntendedUseAnswer: (hasIntendedUse: boolean) => void
@@ -31,6 +31,7 @@ export default function GenerateWorkflowContent({
   intendedUse,
   setIntendedUse,
   selectedProducts,
+  similarProducts,
   workflowEndRef,
   handleDeviceNameSubmit,
   handleIntendedUseAnswer,

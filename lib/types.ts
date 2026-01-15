@@ -6,6 +6,8 @@ export interface SimilarProduct {
   device: string
   regulationDescription: string
   medicalSpecialty: string
+  deviceClass?: string
+  regulationNumber?: string
   fdaClassificationLink?: string
 }
 
