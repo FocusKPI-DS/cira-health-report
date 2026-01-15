@@ -277,7 +277,7 @@ export default function GenerateWorkflowContent({
           <div className={styles.messageContent}>
             <div className={styles.loading}>
               ⏳
-              {countdown !== null && (
+              {countdown !== null && countdown !== undefined && (
                 <span style={{ marginLeft: '8px', fontSize: '14px' }}>
                   {formatCountdown(countdown)}
                 </span>
