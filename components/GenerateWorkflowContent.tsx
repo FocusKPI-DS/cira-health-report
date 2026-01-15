@@ -21,6 +21,7 @@ interface GenerateWorkflowContentProps {
   handleGenerateReport: () => void
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
+  countdown?: number | null
 }
 
 export default function GenerateWorkflowContent({
@@ -41,7 +42,8 @@ export default function GenerateWorkflowContent({
   handleToggleProduct,
   handleGenerateReport,
   styles,
-  renderCompleted
+  renderCompleted,
+  countdown
 }: GenerateWorkflowContentProps) {
   
   const renderMessageContent = (message: Message) => {
@@ -57,6 +59,12 @@ export default function GenerateWorkflowContent({
         })}
       </p>
     )
+  }
+
+  const formatCountdown = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
 
   return (
@@ -267,7 +275,14 @@ export default function GenerateWorkflowContent({
             <div className={styles.aiAvatar}>CA</div>
           </div>
           <div className={styles.messageContent}>
-            <div className={styles.loading}>⏳</div>
+            <div className={styles.loading}>
+              ⏳
+              {countdown !== null && (
+                <span style={{ marginLeft: '8px', fontSize: '14px' }}>
+                  {formatCountdown(countdown)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

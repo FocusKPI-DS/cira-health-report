@@ -25,8 +25,20 @@ function GenerateContent() {
     }
   })
 
-  const handleViewReport = () => {
-    setShowReportModal(true)
+  const handleViewReport = async () => {
+    // Fetch report data if not already loaded
+    if (reportData.length === 0 && workflow.analysisId) {
+      try {
+        const hazards = await workflow.fetchReportData()
+        setReportData(hazards)
+        setShowReportModal(true)
+      } catch (error) {
+        console.error('Error fetching report data:', error)
+        alert(error instanceof Error ? error.message : 'Failed to load report data')
+      }
+    } else {
+      setShowReportModal(true)
+    }
   }
 
   const handleStartNewReport = () => {
@@ -83,6 +95,7 @@ function GenerateContent() {
           handleGenerateReport={workflow.handleGenerateReport}
           styles={styles}
           renderCompleted={renderCompleted}
+          countdown={workflow.countdown}
         />
       </div>
 

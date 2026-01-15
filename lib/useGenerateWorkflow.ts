@@ -101,7 +101,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   }])
   const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [analysisId, setAnalysisId] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState<number | null>(null)
   const workflowEndRef = useRef<HTMLDivElement>(null)
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Initialize with product name if provided
   useEffect(() => {
@@ -305,12 +308,61 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       return
     }
     
+    // Get selected product codes and full product data
+    const selectedProductData = Array.from(selectedProducts)
+      .map(id => similarProducts.find(p => p.id === id))
+      .filter((product): product is SimilarProduct => Boolean(product))
+    
+    const selectedProductCodes = selectedProductData
+      .map(product => product.productCode)
+      .filter((code): code is string => Boolean(code))
+    
+    if (selectedProductCodes.length === 0) {
+      alert('No valid product codes selected')
+      return
+    }
+    
+    // Format similar products for backend (matching the expected structure)
+    const similarProductsForBackend = selectedProductData.map(product => ({
+      id: product.id,
+      productCode: product.productCode,
+      device: product.device,
+      deviceClass: product.deviceClass,
+      regulationDescription: product.regulationDescription,
+      regulationMedicalSpecialty: product.medicalSpecialty,
+      regulationNumber: product.regulationNumber,
+      classificationLink: product.fdaClassificationLink,
+      similarity: product.similarity,
+      source: product.source || 'FDA'
+    }))
+    
     setCurrentStep('generating')
     addMessage('ai', 'Generating your PHA Analysis report... This may take a few moments.', 'generating')
+
+    // Start 5-minute countdown (300 seconds)
+    setCountdown(300)
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+    }
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev === null || prev <= 0) {
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current)
+            countdownIntervalRef.current = null
+          }
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
 
     try {
       // Call the backend API and poll for status
       const result = await analysisApi.startAnalysisAndPoll(
+        selectedProductCodes, // Pass selected product codes
+        similarProductsForBackend, // Pass complete similar products data
+        intendedUse || undefined, // Pass intended use
         (status: AnalysisStatusResponse) => {
           // Update message with status
           console.log('[Analysis] Status update:', status.status, status.detail)
@@ -318,68 +370,59 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         5000 // Poll every 5 seconds
       )
 
-      if (result.status === 'Completed') {
-        // Mock report data (replace with result.result when backend returns actual data)
-        const mockHazards: Hazard[] = [
-          {
-            hazard: 'Crack',
-            potentialHarm: 'Insufficient Information',
-            severity: ['Minor', 'Negligible']
-          },
-          {
-            hazard: 'No Clinical Signs, Symptoms or Conditions',
-            potentialHarm: 'Insufficient Information',
-            severity: ['Minor', 'Negligible']
-          },
-          {
-            hazard: 'No Patient Involvement',
-            potentialHarm: 'Insufficient Information',
-            severity: ['Minor', 'Negligible']
-          },
-          {
-            hazard: 'No Consequences Or Impact To Patient',
-            potentialHarm: 'Insufficient Information',
-            severity: ['Negligible']
-          },
-          {
-            hazard: 'No Known Impact Or Consequence To Patient',
-            potentialHarm: 'Insufficient Information',
-            severity: ['Minor', 'Negligible']
-          },
-          {
-            hazard: 'Battery Malfunction',
-            potentialHarm: 'Device Failure',
-            severity: ['Moderate']
-          },
-          {
-            hazard: 'Software Error',
-            potentialHarm: 'Incorrect Data Display',
-            severity: ['Minor', 'Moderate']
-          },
-          {
-            hazard: 'Electrical Hazard',
-            potentialHarm: 'Patient Shock Risk',
-            severity: ['Critical']
-          }
-        ]
+      // Clear countdown when polling completes
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
+      }
+      setCountdown(null)
 
-        if (onComplete) {
-          onComplete(productName, intendedUse, mockHazards)
-        } else {
-          // Default behavior if no onComplete handler
-          addMessage('ai', 'Your PHA Analysis report has been generated successfully!', 'completed')
-          setCurrentStep('completed')
-        }
-      } else if (result.status === 'Failed') {
-        addMessage('ai', `Analysis failed: ${result.detail}`, 'completed')
+      // Save analysis ID for later fetching results
+      setAnalysisId(result.analysisId)
+
+      if (result.status === 'Completed' || result.status === 'Failed') {
+        // Analysis finished - show completion message and let user view report
+        addMessage('ai', 'Your PHA Analysis has been completed! Click "View Report" to see the results.', 'completed')
         setCurrentStep('completed')
-        alert('Failed to generate analysis. Please try again.')
+        
+        // Notify parent with empty hazards - they'll be fetched when View Report is clicked
+        if (onComplete) {
+          onComplete(productName, intendedUse, [])
+        }
+      } else {
+        // Other status (should not happen, but handle gracefully)
+        addMessage('ai', `Analysis status: ${result.status}. ${result.detail}`, 'completed')
+        setCurrentStep('completed')
       }
     } catch (error) {
+      // Clear countdown on error
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
+      }
+      setCountdown(null)
+      
       console.error('[Analysis] Error:', error)
       addMessage('ai', 'An error occurred while generating the analysis. Please try again.', 'completed')
       setCurrentStep('completed')
       alert(error instanceof Error ? error.message : 'Failed to generate analysis')
+    }
+  }
+
+  const fetchReportData = async (): Promise<Hazard[]> => {
+    if (!analysisId) {
+      throw new Error('No analysis ID available')
+    }
+
+    try {
+      const hazards = await analysisApi.fetchTransformedResults(analysisId)
+      if (hazards.length === 0) {
+        throw new Error('No hazards found in the analysis')
+      }
+      return hazards
+    } catch (error) {
+      console.error('[Analysis] Error fetching results:', error)
+      throw error
     }
   }
 
@@ -414,6 +457,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     isSearching,
     messageHistory,
     workflowEndRef,
+    analysisId,
+    countdown,
     
     // Handlers
     handleDeviceNameSubmit,
@@ -424,6 +469,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     handleRetrySearch,
     handleToggleProduct,
     handleGenerateReport,
+    fetchReportData,
     reset
   }
 }

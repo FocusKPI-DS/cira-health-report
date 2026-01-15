@@ -9,6 +9,8 @@ export interface SimilarProduct {
   deviceClass?: string
   regulationNumber?: string
   fdaClassificationLink?: string
+  similarity?: string
+  source?: string
 }
 
 export interface Hazard {
