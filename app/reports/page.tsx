@@ -19,7 +19,7 @@ interface Report {
 
 export default function ReportsPage() {
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, isAnonymous } = useAuth()
   const [loading, setLoading] = useState(true)
   const [reports, setReports] = useState<Report[]>([])
 
@@ -74,7 +74,7 @@ export default function ReportsPage() {
 
   return (
     <main className={styles.main}>
-      <Header showUserMenu={true} />
+      <Header showAuthButtons={!user || isAnonymous} showUserMenu={!!(user && !isAnonymous)} />
       <div className={styles.container}>
         <div className={styles.contentCard}>
           <div className={styles.header}>

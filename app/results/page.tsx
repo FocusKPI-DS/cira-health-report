@@ -208,7 +208,7 @@ function ResultsContent() {
 
   return (
     <main className={styles.main}>
-      <Header showAuthButtons={!user || isAnonymous} showUserMenu={user && !isAnonymous} />
+      <Header showAuthButtons={!user || isAnonymous} showUserMenu={!!(user && !isAnonymous)} />
       <div className={styles.pageContent}>
         <div className={`${styles.sidebarWrapper} ${!isSidebarExpanded ? styles.sidebarWrapperCollapsed : ''}`}>
           <div className={`${styles.sidebar} ${!isSidebarExpanded ? styles.sidebarCollapsed : ''}`}>
