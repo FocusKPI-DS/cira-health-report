@@ -1,31 +1,332 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import styles from './PaymentModal.module.css'
-import { LockIcon } from './Icons'
+import { LockIcon, DownloadIcon } from './Icons'
+import { useAuth } from '@/lib/auth'
+import { Transaction } from '@/lib/types/stripe'
+
+// Initialize Stripe
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
 
 interface PaymentModalProps {
   onClose: () => void
   onSuccess: () => void
+  reportId?: string
+  productName?: string
+  amount?: number
 }
 
-export default function PaymentModal({ onClose, onSuccess }: PaymentModalProps) {
-  const [cardNumber, setCardNumber] = useState('')
-  const [expiryDate, setExpiryDate] = useState('')
-  const [cvv, setCvv] = useState('')
-  const [isProcessing, setIsProcessing] = useState(false)
+type TabType = 'payment' | 'history'
 
-  const handleSubmit = (e: React.FormEvent) => {
+// Payment form component
+function PaymentForm({ 
+  onSuccess, 
+  onClose, 
+  reportId, 
+  productName, 
+  amount = 5.00 
+}: {
+  onSuccess: () => void
+  onClose: () => void
+  reportId?: string
+  productName?: string
+  amount?: number
+}) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const { user } = useAuth()
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+
+  // Create payment intent on mount
+  useEffect(() => {
+    const createPaymentIntent = async () => {
+      if (!user) {
+        setError('Please log in to make a payment')
+        return
+      }
+
+      try {
+        const response = await fetch('/api/payments/create-intent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: amount,
+            currency: 'usd',
+            reportId: reportId,
+            userId: user.uid,
+            productName: productName,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to create payment intent')
+        }
+
+        const data = await response.json()
+        setClientSecret(data.clientSecret)
+      } catch (err: any) {
+        setError(err.message || 'Failed to initialize payment')
+        console.error('[Payment] Error creating intent:', err)
+      }
+    }
+
+    createPaymentIntent()
+  }, [user, amount, reportId, productName])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!stripe || !elements || !clientSecret) {
+      return
+    }
+
     setIsProcessing(true)
-    
-    // Simulate payment processing
-    setTimeout(() => {
-      console.log('Payment processed:', { cardNumber, expiryDate, cvv })
-      setIsProcessing(false)
+    setError(null)
+
+    try {
+      // Submit payment
+      const { error: submitError } = await elements.submit()
+      if (submitError) {
+        setError(submitError.message || 'Payment submission failed')
+        setIsProcessing(false)
+        return
+      }
+
+      // Confirm payment
+      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        clientSecret,
+        confirmParams: {
+          return_url: window.location.href,
+        },
+        redirect: 'if_required',
+      })
+
+      if (confirmError) {
+        setError(confirmError.message || 'Payment failed')
+        setIsProcessing(false)
+        return
+      }
+
+      if (!paymentIntent) {
+        setError('Payment intent not found')
+        setIsProcessing(false)
+        return
+      }
+
+      // Payment succeeded - confirm with backend
+      const confirmResponse = await fetch('/api/payments/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentIntentId: paymentIntent.id,
+        }),
+      })
+
+      if (!confirmResponse.ok) {
+        throw new Error('Failed to confirm payment')
+      }
+
+      // Success!
       onSuccess()
-    }, 1500)
+    } catch (err: any) {
+      setError(err.message || 'Payment processing failed')
+      console.error('[Payment] Error:', err)
+    } finally {
+      setIsProcessing(false)
+    }
   }
+
+  if (!clientSecret) {
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.spinner}></div>
+        <p>Initializing payment...</p>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className={styles.form}>
+      {error && (
+        <div className={styles.errorMessage}>
+          {error}
+        </div>
+      )}
+      
+      <div className={styles.paymentElementWrapper}>
+        <PaymentElement />
+      </div>
+
+      <button 
+        type="submit" 
+        className={styles.payButton}
+        disabled={isProcessing || !stripe}
+      >
+        {isProcessing ? 'Processing...' : `Pay $${amount.toFixed(2)}`}
+      </button>
+    </form>
+  )
+}
+
+// Transaction history component
+function TransactionHistory({ userId }: { userId: string }) {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(`/api/payments/transactions?userId=${encodeURIComponent(userId)}`)
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch transactions')
+        }
+
+        const data = await response.json()
+        setTransactions(data.transactions || [])
+      } catch (err: any) {
+        setError(err.message || 'Failed to load transactions')
+        console.error('[Transactions] Error:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (userId) {
+      fetchTransactions()
+    }
+  }, [userId])
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const formatCurrency = (amount: number, currency: string = 'usd') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(amount)
+  }
+
+  const getStatusClass = (status: Transaction['status']) => {
+    switch (status) {
+      case 'succeeded':
+        return styles.statusSuccess
+      case 'failed':
+        return styles.statusFailed
+      case 'refunded':
+        return styles.statusRefunded
+      case 'pending':
+        return styles.statusPending
+      case 'canceled':
+        return styles.statusCanceled
+      default:
+        return ''
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.spinner}></div>
+        <p>Loading transactions...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={styles.errorMessage}>
+        {error}
+      </div>
+    )
+  }
+
+  if (transactions.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        <p className={styles.emptyText}>No transactions yet</p>
+        <p className={styles.emptySubtext}>
+          Your payment history will appear here
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.transactionsList}>
+      {transactions.map((transaction) => (
+        <div key={transaction.id} className={styles.transactionCard}>
+          <div className={styles.transactionHeader}>
+            <div className={styles.transactionInfo}>
+              <h4 className={styles.transactionId}>
+                {transaction.description || `Payment ${transaction.id.slice(-8)}`}
+              </h4>
+              <p className={styles.transactionDate}>{formatDate(transaction.createdAt)}</p>
+            </div>
+            <div className={styles.transactionAmount}>
+              <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
+              <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
+                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+              </span>
+            </div>
+          </div>
+          
+          {transaction.productName && (
+            <p className={styles.transactionProduct}>
+              Report: <strong>{transaction.productName}</strong>
+            </p>
+          )}
+
+          {transaction.status === 'succeeded' && transaction.receiptUrl && (
+            <div className={styles.transactionActions}>
+              <a 
+                href={transaction.receiptUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.receiptLink}
+              >
+                <DownloadIcon />
+                View Receipt
+              </a>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Main PaymentModal component
+export default function PaymentModal({ 
+  onClose, 
+  onSuccess, 
+  reportId, 
+  productName, 
+  amount = 5.00 
+}: PaymentModalProps) {
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState<TabType>('payment')
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -33,6 +334,7 @@ export default function PaymentModal({ onClose, onSuccess }: PaymentModalProps) 
         <button className={styles.closeButton} onClick={onClose}>
           ×
         </button>
+        
         <h2 className={styles.title}>Download Full Report</h2>
         <p className={styles.subtitle}>
           Complete your purchase to download the comprehensive PHA analysis
@@ -40,68 +342,47 @@ export default function PaymentModal({ onClose, onSuccess }: PaymentModalProps) 
         
         <div className={styles.priceSection}>
           <div className={styles.priceLabel}>Total</div>
-          <div className={styles.priceAmount}>$5.00</div>
+          <div className={styles.priceAmount}>${amount.toFixed(2)}</div>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.formGroup}>
-            <label htmlFor="cardNumber" className={styles.label}>
-              Card Number
-            </label>
-            <input
-              id="cardNumber"
-              type="text"
-              value={cardNumber}
-              onChange={(e) => setCardNumber(e.target.value)}
-              className={styles.input}
-              placeholder="1234 5678 9012 3456"
-              maxLength={19}
-              required
-            />
-          </div>
-
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label htmlFor="expiryDate" className={styles.label}>
-                Expiry Date
-              </label>
-              <input
-                id="expiryDate"
-                type="text"
-                value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-                className={styles.input}
-                placeholder="MM/YY"
-                maxLength={5}
-                required
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="cvv" className={styles.label}>
-                CVV
-              </label>
-              <input
-                id="cvv"
-                type="text"
-                value={cvv}
-                onChange={(e) => setCvv(e.target.value)}
-                className={styles.input}
-                placeholder="123"
-                maxLength={4}
-                required
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            className={styles.payButton}
-            disabled={isProcessing}
+        {/* Tabs */}
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${activeTab === 'payment' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('payment')}
           >
-            {isProcessing ? 'Processing...' : 'Pay $5.00'}
+            Payment
           </button>
-        </form>
+          <button
+            className={`${styles.tab} ${activeTab === 'history' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            Transaction History
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className={styles.tabContent}>
+          {activeTab === 'payment' ? (
+            <Elements stripe={stripePromise}>
+              <PaymentForm
+                onSuccess={onSuccess}
+                onClose={onClose}
+                reportId={reportId}
+                productName={productName}
+                amount={amount}
+              />
+            </Elements>
+          ) : (
+            user ? (
+              <TransactionHistory userId={user.uid} />
+            ) : (
+              <div className={styles.errorMessage}>
+                Please log in to view transaction history
+              </div>
+            )
+          )}
+        </div>
 
         <p className={styles.footerText}>
           <LockIcon />
@@ -111,4 +392,3 @@ export default function PaymentModal({ onClose, onSuccess }: PaymentModalProps) 
     </div>
   )
 }
-

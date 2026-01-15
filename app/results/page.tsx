@@ -375,7 +375,15 @@ function ResultsContent() {
       </div>
 
       {showSignInModal && <SignInModal onClose={handleCloseModal} onSuccess={handleSignInSuccess} />}
-      {showPaymentModal && <PaymentModal onClose={handleClosePayment} onSuccess={handlePaymentSuccess} />}
+      {showPaymentModal && (
+        <PaymentModal 
+          onClose={handleClosePayment} 
+          onSuccess={handlePaymentSuccess}
+          reportId={analysisId || undefined}
+          productName={productName || undefined}
+          amount={5.00}
+        />
+      )}
       <PHADetailsModal 
         isOpen={showPHADetailsModal}
         onClose={() => setShowPHADetailsModal(false)}
