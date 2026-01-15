@@ -149,51 +149,80 @@ function PaymentForm({
   const { user } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [isInitializing, setIsInitializing] = useState(false)
 
-  // Create payment intent on mount
-  useEffect(() => {
-    const createPaymentIntent = async () => {
-      if (!user) {
-        setError('Please log in to make a payment')
-        return
-      }
-
-      try {
-        const response = await fetch('/api/payments/create-intent', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: amount,
-            currency: 'usd',
-            reportId: reportId,
-            userId: user.uid,
-            productName: productName,
-          }),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || 'Failed to create payment intent')
-        }
-
-        const data = await response.json()
-        setClientSecret(data.clientSecret)
-      } catch (err: any) {
-        setError(err.message || 'Failed to initialize payment')
-        console.error('[Payment] Error creating intent:', err)
-      }
+  // Create payment intent only when user is ready to pay
+  const handleInitializePayment = async () => {
+    if (!user) {
+      setError('Please log in to make a payment')
+      return
     }
 
-    createPaymentIntent()
-  }, [user, amount, reportId, productName])
+    if (clientSecret) {
+      // Already initialized
+      return
+    }
 
+    setIsInitializing(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/payments/create-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amount,
+          currency: 'usd',
+          reportId: reportId,
+          userId: user.uid,
+          productName: productName,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create payment intent')
+      }
+
+      const data = await response.json()
+      setClientSecret(data.clientSecret)
+    } catch (err: any) {
+      setError(err.message || 'Failed to initialize payment')
+      console.error('[Payment] Error creating intent:', err)
+    } finally {
+      setIsInitializing(false)
+    }
+  }
+
+  // Show initial state - user needs to click to proceed
   if (!clientSecret) {
     return (
-      <div className={styles.loadingState}>
-        <div className={styles.spinner}></div>
-        <p>Initializing payment...</p>
+      <div className={styles.paymentInitState}>
+        <p className={styles.initText}>
+          Click the button below to proceed with payment
+        </p>
+        <button
+          type="button"
+          className={styles.initButton}
+          onClick={handleInitializePayment}
+          disabled={isInitializing || !user}
+        >
+          {isInitializing ? (
+            <>
+              <div className={styles.spinner}></div>
+              Initializing payment...
+            </>
+          ) : (
+            `Proceed to Payment - $${amount.toFixed(2)}`
+          )}
+        </button>
+        {error && (
+          <div className={styles.errorMessage}>
+            {error}
+          </div>
+        )}
       </div>
     )
   }
@@ -368,57 +397,63 @@ export default function PaymentModal({
           ×
         </button>
         
-        <h2 className={styles.title}>Download Full Report</h2>
-        <p className={styles.subtitle}>
-          Complete your purchase to download the comprehensive PHA analysis
-        </p>
-        
-        <div className={styles.priceSection}>
-          <div className={styles.priceLabel}>Total</div>
-          <div className={styles.priceAmount}>${amount.toFixed(2)}</div>
+        <div className={styles.modalHeader}>
+          <h2 className={styles.title}>Download Full Report</h2>
+          <p className={styles.subtitle}>
+            Complete your purchase to download the comprehensive PHA analysis
+          </p>
         </div>
 
-        {/* Tabs */}
-        <div className={styles.tabs}>
-          <button
-            className={`${styles.tab} ${activeTab === 'payment' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('payment')}
-          >
-            Payment
-          </button>
-          <button
-            className={`${styles.tab} ${activeTab === 'history' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            Transaction History
-          </button>
-        </div>
+        <div className={styles.modalContent}>
+          <div className={styles.priceSection}>
+            <div className={styles.priceLabel}>Total</div>
+            <div className={styles.priceAmount}>${amount.toFixed(2)}</div>
+          </div>
 
-        {/* Tab Content */}
-        <div className={styles.tabContent}>
-          {activeTab === 'payment' ? (
-            <PaymentForm
-              onSuccess={onSuccess}
-              onClose={onClose}
-              reportId={reportId}
-              productName={productName}
-              amount={amount}
-            />
-          ) : (
-            user ? (
-              <TransactionHistory userId={user.uid} />
+          {/* Tabs */}
+          <div className={styles.tabs}>
+            <button
+              className={`${styles.tab} ${activeTab === 'payment' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('payment')}
+            >
+              Payment
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'history' ? styles.tabActive : ''}`}
+              onClick={() => setActiveTab('history')}
+            >
+              Transaction History
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          <div className={styles.tabContent}>
+            {activeTab === 'payment' ? (
+              <PaymentForm
+                onSuccess={onSuccess}
+                onClose={onClose}
+                reportId={reportId}
+                productName={productName}
+                amount={amount}
+              />
             ) : (
-              <div className={styles.errorMessage}>
-                Please log in to view transaction history
-              </div>
-            )
-          )}
+              user ? (
+                <TransactionHistory userId={user.uid} />
+              ) : (
+                <div className={styles.errorMessage}>
+                  Please log in to view transaction history
+                </div>
+              )
+            )}
+          </div>
         </div>
 
-        <p className={styles.footerText}>
-          <LockIcon />
-          Secure payment powered by Stripe
-        </p>
+        <div className={styles.modalFooter}>
+          <p className={styles.footerText}>
+            <LockIcon />
+            Secure payment powered by Stripe
+          </p>
+        </div>
       </div>
     </div>
   )
