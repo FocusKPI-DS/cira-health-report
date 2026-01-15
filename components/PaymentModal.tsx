@@ -28,7 +28,8 @@ function PaymentFormInner({
   reportId, 
   productName, 
   amount = 5.00,
-  clientSecret
+  clientSecret,
+  onProcessingChange
 }: {
   onSuccess: () => void
   onClose: () => void
@@ -36,11 +37,19 @@ function PaymentFormInner({
   productName?: string
   amount?: number
   clientSecret: string
+  onProcessingChange?: (isProcessing: boolean) => void
 }) {
   const stripe = useStripe()
   const elements = useElements()
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Notify parent when processing state changes
+  useEffect(() => {
+    if (onProcessingChange) {
+      onProcessingChange(isProcessing)
+    }
+  }, [isProcessing, onProcessingChange])
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -138,18 +147,51 @@ function PaymentForm({
   onClose, 
   reportId, 
   productName, 
-  amount = 5.00 
+  amount = 5.00,
+  onProcessingChange
 }: {
   onSuccess: () => void
   onClose: () => void
   reportId?: string
   productName?: string
   amount?: number
+  onProcessingChange?: (isProcessing: boolean) => void
 }) {
   const { user } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [isInitializing, setIsInitializing] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+
+  // Cancel PaymentIntent when component unmounts or modal closes (if not submitted)
+  useEffect(() => {
+    return () => {
+      // Cleanup: cancel PaymentIntent if it was created but not submitted
+      if (paymentIntentId && !isSubmitted) {
+        cancelPaymentIntent(paymentIntentId).catch((err) => {
+          console.error('[Payment] Error canceling intent on cleanup:', err)
+        })
+      }
+    }
+  }, [paymentIntentId, isSubmitted])
+
+  const cancelPaymentIntent = async (intentId: string) => {
+    try {
+      await fetch('/api/payments/cancel-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentIntentId: intentId,
+        }),
+      })
+    } catch (err) {
+      // Silently fail - this is cleanup, not critical
+      console.error('[Payment] Failed to cancel intent:', err)
+    }
+  }
 
   // Create payment intent only when user is ready to pay
   const handleInitializePayment = async () => {
@@ -188,6 +230,9 @@ function PaymentForm({
 
       const data = await response.json()
       setClientSecret(data.clientSecret)
+      // Extract payment intent ID from client secret (format: pi_xxx_secret_yyy)
+      const intentId = data.clientSecret.split('_secret_')[0]
+      setPaymentIntentId(intentId)
     } catch (err: any) {
       setError(err.message || 'Failed to initialize payment')
       console.error('[Payment] Error creating intent:', err)
@@ -230,12 +275,16 @@ function PaymentForm({
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
       <PaymentFormInner
-        onSuccess={onSuccess}
+        onSuccess={() => {
+          setIsSubmitted(true) // Mark as submitted so we don't cancel it
+          onSuccess()
+        }}
         onClose={onClose}
         reportId={reportId}
         productName={productName}
         amount={amount}
         clientSecret={clientSecret}
+        onProcessingChange={onProcessingChange}
       />
     </Elements>
   )
@@ -389,11 +438,34 @@ export default function PaymentModal({
 }: PaymentModalProps) {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('payment')
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false)
+
+  // Handle modal close - PaymentForm will handle canceling PaymentIntent if needed
+  const handleClose = () => {
+    // Prevent closing if payment is processing
+    if (isPaymentProcessing) {
+      return
+    }
+    onClose()
+  }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div 
+      className={styles.overlay} 
+      onClick={handleClose}
+      style={{ cursor: isPaymentProcessing ? 'not-allowed' : 'pointer' }}
+    >
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.closeButton} onClick={onClose}>
+        <button 
+          className={styles.closeButton} 
+          onClick={handleClose}
+          disabled={isPaymentProcessing}
+          style={{ 
+            opacity: isPaymentProcessing ? 0.5 : 1,
+            cursor: isPaymentProcessing ? 'not-allowed' : 'pointer'
+          }}
+          title={isPaymentProcessing ? 'Payment is processing, please wait...' : 'Close'}
+        >
           ×
         </button>
         
