@@ -23,40 +23,40 @@ export default function LoginPage() {
     try {
       if (isAnonymous) {
         // If user is currently anonymous, link their account to email/password
-        console.log('绑定匿名账号到邮箱...')
+        console.log('Linking anonymous account to email...')
         await linkAnonymousAccount(email, password, isSignUp ? name : undefined)
-        console.log('账号绑定成功，数据已迁移')
-        alert('账号绑定成功！您的数据已保留。')
+        console.log('Account linked successfully, data migrated')
+        alert('Account linked successfully! Your data has been preserved.')
       } else if (isSignUp) {
         // Create new account
         await signUpWithEmail(email, password, name)
-        console.log('注册成功')
+        console.log('Sign up successful')
       } else {
         // Sign in with existing account
         await signInWithEmail(email, password)
-        console.log('登录成功')
+        console.log('Sign in successful')
       }
       
       // Redirect to reports page after successful login
       router.push('/reports')
     } catch (err: any) {
-      console.error('认证错误:', err)
+      console.error('Authentication error:', err)
       
       // Handle specific Firebase error codes
       if (err.code === 'auth/email-already-in-use') {
-        setError('该邮箱已被使用，请尝试登录')
+        setError('This email is already in use, please try signing in')
       } else if (err.code === 'auth/weak-password') {
-        setError('密码强度不够，请使用至少6个字符')
+        setError('Password is too weak, please use at least 6 characters')
       } else if (err.code === 'auth/invalid-email') {
-        setError('邮箱格式不正确')
+        setError('Invalid email format')
       } else if (err.code === 'auth/user-not-found') {
-        setError('账号不存在，请先注册')
+        setError('Account not found, please sign up first')
       } else if (err.code === 'auth/wrong-password') {
-        setError('密码错误，请重试')
+        setError('Incorrect password, please try again')
       } else if (err.code === 'auth/credential-already-in-use') {
-        setError('该邮箱已被其他账号使用')
+        setError('This email is already used by another account')
       } else {
-        setError(err.message || '操作失败，请重试')
+        setError(err.message || 'Operation failed, please try again')
       }
     } finally {
       setLoading(false)
@@ -69,12 +69,12 @@ export default function LoginPage() {
         <div className={styles.header}>
           <h1 className={styles.title}>
             {isAnonymous 
-              ? '绑定您的账号' 
+              ? 'Bind Your Account' 
               : (isSignUp ? 'Create Account' : 'Welcome Back')}
           </h1>
           <p className={styles.subtitle}>
             {isAnonymous
-              ? '将您的临时账号绑定到邮箱，永久保存您的数据'
+              ? 'Bind your temporary account to an email to permanently save your data'
               : (isSignUp 
                 ? 'Sign up to access full PHA analysis features'
                 : 'Sign in to access your PHA analysis')}
@@ -144,9 +144,9 @@ export default function LoginPage() {
             disabled={loading}
           >
             {loading 
-              ? '处理中...' 
+              ? 'Processing...' 
               : (isAnonymous 
-                ? '绑定账号' 
+                ? 'Bind Account' 
                 : (isSignUp ? 'Sign Up' : 'Sign In'))}
           </button>
         </form>

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`迁移数据: ${anonymousUid} -> ${authenticatedUid}`)
+    console.log(`Migrating data: ${anonymousUid} -> ${authenticatedUid}`)
 
     // TODO: Implement your actual data migration logic here
     // Examples of what you might need to migrate:
@@ -34,16 +34,16 @@ export async function POST(request: NextRequest) {
     // For now, return success
     return NextResponse.json({
       success: true,
-      message: '数据迁移成功',
+      message: 'Data migration successful',
       migratedFrom: anonymousUid,
       migratedTo: authenticatedUid
     })
 
   } catch (error: any) {
-    console.error('数据迁移失败:', error)
+    console.error('Data migration failed:', error)
     return NextResponse.json(
       { 
-        error: '数据迁移失败', 
+        error: 'Data migration failed', 
         details: error.message 
       },
       { status: 500 }
