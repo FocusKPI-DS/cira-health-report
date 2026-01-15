@@ -67,40 +67,51 @@ export async function GET(request: NextRequest) {
     })
 
     // Transform PaymentIntents to Transaction objects
-    const transactions: Transaction[] = paymentIntents.data.map((pi) => {
-      const charge = chargeMap.get(pi.id)
-      const receiptUrl = charge?.receipt_url || null
+    // Filter out incomplete PaymentIntents (not yet submitted by user)
+    const incompleteStatuses = ['requires_payment_method', 'requires_confirmation']
+    
+    const transactions: Transaction[] = paymentIntents.data
+      .filter((pi) => {
+        // Only include PaymentIntents that have been submitted/processed
+        // Exclude incomplete ones that were never submitted
+        return !incompleteStatuses.includes(pi.status)
+      })
+      .map((pi) => {
+        const charge = chargeMap.get(pi.id)
+        const receiptUrl = charge?.receipt_url || null
 
-      // Map Stripe status to our Transaction status
-      let status: Transaction['status'] = 'pending'
-      if (pi.status === 'succeeded') {
-        status = 'succeeded'
-      } else if (pi.status === 'canceled') {
-        status = 'canceled'
-      } else if (pi.status === 'processing' || pi.status === 'requires_action') {
-        status = 'pending'
-      } else {
-        status = 'failed'
-      }
+        // Map Stripe status to our Transaction status
+        let status: Transaction['status'] = 'pending'
+        if (pi.status === 'succeeded') {
+          status = 'succeeded'
+        } else if (pi.status === 'canceled') {
+          status = 'canceled'
+        } else if (pi.status === 'processing' || pi.status === 'requires_action') {
+          status = 'pending'
+        } else {
+          // Only mark as failed if it's actually a failed status
+          // (shouldn't include incomplete statuses due to filter above)
+          status = 'failed'
+        }
 
-      // Check if charge was refunded
-      if (charge?.refunded) {
-        status = 'refunded'
-      }
+        // Check if charge was refunded
+        if (charge?.refunded) {
+          status = 'refunded'
+        }
 
-      return {
-        id: pi.id,
-        paymentIntentId: pi.id,
-        amount: pi.amount / 100, // Convert from cents
-        currency: pi.currency,
-        status: status,
-        createdAt: new Date(pi.created * 1000).toISOString(),
-        receiptUrl: receiptUrl,
-        reportId: pi.metadata?.report_id || undefined,
-        productName: pi.metadata?.product_name || undefined,
-        description: pi.description || undefined,
-      }
-    })
+        return {
+          id: pi.id,
+          paymentIntentId: pi.id,
+          amount: pi.amount / 100, // Convert from cents
+          currency: pi.currency,
+          status: status,
+          createdAt: new Date(pi.created * 1000).toISOString(),
+          receiptUrl: receiptUrl,
+          reportId: pi.metadata?.report_id || undefined,
+          productName: pi.metadata?.product_name || undefined,
+          description: pi.description || undefined,
+        }
+      })
 
     // Sort by creation date (newest first)
     transactions.sort((a, b) => 
