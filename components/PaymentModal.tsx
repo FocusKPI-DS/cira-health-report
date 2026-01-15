@@ -157,7 +157,8 @@ function PaymentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={styles.form}>
+    <Elements stripe={stripePromise} options={{ clientSecret }}>
+      <form onSubmit={handleSubmit} className={styles.form}>
       {error && (
         <div className={styles.errorMessage}>
           {error}
@@ -176,6 +177,7 @@ function PaymentForm({
         {isProcessing ? 'Processing...' : `Pay $${amount.toFixed(2)}`}
       </button>
     </form>
+    </Elements>
   )
 }
 
@@ -364,15 +366,13 @@ export default function PaymentModal({
         {/* Tab Content */}
         <div className={styles.tabContent}>
           {activeTab === 'payment' ? (
-            <Elements stripe={stripePromise}>
-              <PaymentForm
-                onSuccess={onSuccess}
-                onClose={onClose}
-                reportId={reportId}
-                productName={productName}
-                amount={amount}
-              />
-            </Elements>
+            <PaymentForm
+              onSuccess={onSuccess}
+              onClose={onClose}
+              reportId={reportId}
+              productName={productName}
+              amount={amount}
+            />
           ) : (
             user ? (
               <TransactionHistory userId={user.uid} />
