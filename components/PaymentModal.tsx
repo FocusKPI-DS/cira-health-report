@@ -21,65 +21,27 @@ interface PaymentModalProps {
 
 type TabType = 'payment' | 'history'
 
-// Payment form component
-function PaymentForm({ 
+// Payment form component (must be inside Elements wrapper)
+function PaymentFormInner({ 
   onSuccess, 
   onClose, 
   reportId, 
   productName, 
-  amount = 5.00 
+  amount = 5.00,
+  clientSecret
 }: {
   onSuccess: () => void
   onClose: () => void
   reportId?: string
   productName?: string
   amount?: number
+  clientSecret: string
 }) {
   const stripe = useStripe()
   const elements = useElements()
-  const { user } = useAuth()
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
 
-  // Create payment intent on mount
-  useEffect(() => {
-    const createPaymentIntent = async () => {
-      if (!user) {
-        setError('Please log in to make a payment')
-        return
-      }
-
-      try {
-        const response = await fetch('/api/payments/create-intent', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: amount,
-            currency: 'usd',
-            reportId: reportId,
-            userId: user.uid,
-            productName: productName,
-          }),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || 'Failed to create payment intent')
-        }
-
-        const data = await response.json()
-        setClientSecret(data.clientSecret)
-      } catch (err: any) {
-        setError(err.message || 'Failed to initialize payment')
-        console.error('[Payment] Error creating intent:', err)
-      }
-    }
-
-    createPaymentIntent()
-  }, [user, amount, reportId, productName])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -147,18 +109,8 @@ function PaymentForm({
     }
   }
 
-  if (!clientSecret) {
-    return (
-      <div className={styles.loadingState}>
-        <div className={styles.spinner}></div>
-        <p>Initializing payment...</p>
-      </div>
-    )
-  }
-
   return (
-    <Elements stripe={stripePromise} options={{ clientSecret }}>
-      <form onSubmit={handleSubmit} className={styles.form}>
+    <form onSubmit={handleSubmit} className={styles.form}>
       {error && (
         <div className={styles.errorMessage}>
           {error}
@@ -177,6 +129,85 @@ function PaymentForm({
         {isProcessing ? 'Processing...' : `Pay $${amount.toFixed(2)}`}
       </button>
     </form>
+  )
+}
+
+// Payment form wrapper that handles clientSecret fetching
+function PaymentForm({ 
+  onSuccess, 
+  onClose, 
+  reportId, 
+  productName, 
+  amount = 5.00 
+}: {
+  onSuccess: () => void
+  onClose: () => void
+  reportId?: string
+  productName?: string
+  amount?: number
+}) {
+  const { user } = useAuth()
+  const [error, setError] = useState<string | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+
+  // Create payment intent on mount
+  useEffect(() => {
+    const createPaymentIntent = async () => {
+      if (!user) {
+        setError('Please log in to make a payment')
+        return
+      }
+
+      try {
+        const response = await fetch('/api/payments/create-intent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: amount,
+            currency: 'usd',
+            reportId: reportId,
+            userId: user.uid,
+            productName: productName,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to create payment intent')
+        }
+
+        const data = await response.json()
+        setClientSecret(data.clientSecret)
+      } catch (err: any) {
+        setError(err.message || 'Failed to initialize payment')
+        console.error('[Payment] Error creating intent:', err)
+      }
+    }
+
+    createPaymentIntent()
+  }, [user, amount, reportId, productName])
+
+  if (!clientSecret) {
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.spinner}></div>
+        <p>Initializing payment...</p>
+      </div>
+    )
+  }
+
+  return (
+    <Elements stripe={stripePromise} options={{ clientSecret }}>
+      <PaymentFormInner
+        onSuccess={onSuccess}
+        onClose={onClose}
+        reportId={reportId}
+        productName={productName}
+        amount={amount}
+        clientSecret={clientSecret}
+      />
     </Elements>
   )
 }
