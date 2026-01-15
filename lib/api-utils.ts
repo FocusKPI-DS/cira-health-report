@@ -60,11 +60,16 @@ export async function getAuthHeaders(includeContentType: boolean = true): Promis
   // Get a valid Firebase ID token
   const token = await getValidToken()
   
+  console.log('[getAuthHeaders] Token available:', !!token)
+  console.log('[getAuthHeaders] Token length:', token ? token.length : 0)
+  
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
   // If no token, headers will be empty (no Authorization header)
   // Backend will return 401 if auth is required
+  
+  console.log('[getAuthHeaders] Final headers:', Object.keys(headers))
   
   return headers
 }

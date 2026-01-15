@@ -96,25 +96,47 @@ export const analysisApi = {
   async startAnalysis(productCodes: string[], similarProducts: any[] = [], intendedUse?: string): Promise<StartAnalysisResponse> {
     const headers = await getAuthHeaders()
     
+    const requestBody = {
+      product_codes: productCodes,
+      similar_products: similarProducts,
+      intended_use_snapshot: intendedUse || null
+    }
+    
+    console.log('[Start Analysis] API URL:', API_URL)
+    console.log('[Start Analysis] Request URL:', `${API_URL}/api/v1/anonclient/start-analysis`)
+    console.log('[Start Analysis] Request headers:', JSON.stringify(headers, null, 2))
+    console.log('[Start Analysis] Request body:', JSON.stringify(requestBody, null, 2))
+    
     const response = await fetch(`${API_URL}/api/v1/anonclient/start-analysis`, {
       method: 'POST',
       headers: {
         ...headers,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        product_codes: productCodes,
-        similar_products: similarProducts,
-        intended_use_snapshot: intendedUse || null
-      }),
+      body: JSON.stringify(requestBody),
     })
     
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Failed to start analysis' }))
-      throw new Error(error.detail || 'Failed to start analysis')
+      const errorText = await response.text()
+      console.error('[Start Analysis] Error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      })
+      
+      let error
+      try {
+        error = JSON.parse(errorText)
+      } catch {
+        error = { detail: errorText || 'Failed to start analysis' }
+      }
+      
+      throw new Error(error.detail || `Failed to start analysis: ${response.statusText}`)
     }
     
-    return response.json()
+    const responseData = await response.json()
+    console.log('[Start Analysis] Success response:', responseData)
+    return responseData
   },
 
   /**
