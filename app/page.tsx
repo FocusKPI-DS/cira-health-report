@@ -31,8 +31,8 @@ export default function Home() {
         <div className={styles.heroContent}>
           <div className={styles.badge}>Powered by focuskpi</div>
           <h1 className={styles.title}>
-            First PHA Analysis Draft <br />
-            <span className={styles.highlight}>under 30 minutes</span>
+            Get Your First PHA Analysis Draft in 30 Seconds <br />
+            <span className={styles.highlight}>Try It for Free</span>
           </h1>
           <p className={styles.subtitle}>
             Streamline your Process Hazard Analysis with AI-powered insights.<br />
