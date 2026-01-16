@@ -230,7 +230,7 @@ async function waitForFirebaseToken(firebaseUser: User, maxRetries = 3): Promise
       if (i > 0) {
         await new Promise(resolve => setTimeout(resolve, 1000 * i))
       }
-      const token = await firebaseUser.getIdToken(true)
+      const token = await firebaseUser.getIdToken()
       if (token) {
         return token
       }
@@ -258,7 +258,7 @@ async function syncUserToBackend(firebaseUser: User) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
     
     // Wait 1 second to prevent "token used too early" errors due to clock skew
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    //await new Promise(resolve => setTimeout(resolve, 1000))
 
     let syncResponse: Response
     try {
@@ -313,7 +313,7 @@ async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
     
     // Wait 1 second to prevent "token used too early" errors due to clock skew
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    //await new Promise(resolve => setTimeout(resolve, 1000))
 
     let syncResponse: Response
     try {
