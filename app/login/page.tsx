@@ -29,8 +29,8 @@ export default function LoginPage() {
         console.log('✅ Anonymous account data successfully merged')
       }
       
-      // Redirect to reports page after successful login
-      router.push('/reports')
+      // Redirect to results page after successful login
+      router.push('/results')
     } catch (err: any) {
       console.error('Authentication error:', err)
       
