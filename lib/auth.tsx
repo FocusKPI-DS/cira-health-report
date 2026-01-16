@@ -13,11 +13,17 @@ import {
 } from 'firebase/auth'
 import { getFirebaseAuth } from './firebase'
 
+interface SmartLoginResult {
+  user: User
+  merged: boolean
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
   isAnonymous: boolean
   currentTeamId: string | null
+  smartLogin: (email: string, password: string, displayName?: string) => Promise<SmartLoginResult>
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>
   linkAnonymousAccount: (email: string, password: string, displayName?: string) => Promise<User>
@@ -78,6 +84,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [])
 
+  // Smart login: automatically handles anonymous upgrade, login, and data merge
+  const smartLogin = async (email: string, password: string, displayName?: string): Promise<SmartLoginResult> => {
+    console.log('开始智能登录流程...')
+    const auth = getFirebaseAuth()
+    const anonUser = auth.currentUser
+    
+    const credential = EmailAuthProvider.credential(email, password)
+
+    // 如果没有提供displayName，使用邮箱@前面的部分
+    const finalDisplayName = displayName || email.split('@')[0]
+
+    console.log('anonUser:', anonUser ? `${anonUser.isAnonymous ? '匿名用户' : '已认证用户'} (${anonUser.uid})` : '无用户')
+    // 1️⃣ 匿名用户，优先尝试升级
+    if (anonUser?.isAnonymous) {
+      try {
+        const linkResult = await linkWithCredential(anonUser, credential)
+        console.log('匿名账号升级成功:', linkResult.user.email)
+        
+        // Update display name
+        if (linkResult.user) {
+          await updateProfile(linkResult.user, { displayName: finalDisplayName })
+        }
+        
+        // 手动更新状态，因为 linkWithCredential 不会触发 onAuthStateChanged
+        setUser(linkResult.user)
+        setIsAnonymous(false)
+        
+        return { user: linkResult.user, merged: false }
+      } catch (err: any) {
+        // 捕获邮箱已存在的两种错误代码
+        if (err.code !== 'auth/credential-already-in-use' && err.code !== 'auth/email-already-in-use') {
+          throw err
+        }
+        // 冲突，继续走登录流程
+        console.log('邮箱已存在，继续登录并合并数据...')
+      }
+    }
+
+    // 2️⃣ 正常登录
+    const result = await signInWithEmailAndPassword(auth, email, password)
+    const realUser = result.user
+    console.log('登录成功:', realUser.email)
+
+    // 3️⃣ 有匿名账号才需要合并
+    if (anonUser && anonUser.uid !== realUser.uid) {
+      console.log('检测到匿名账号，开始合并数据...')
+      await migrateUserData(anonUser.uid, realUser.uid)
+      console.log('✅ 数据合并完成，匿名账号将自动失效')
+      // 注意：不需要手动删除匿名账号，因为：
+      // 1. 登录后匿名账号的认证上下文已失效，无法删除（会报 admin-restricted-operation 错误）
+      // 2. 数据已经迁移，匿名账号不会再被使用
+      // 3. Firebase 会自动清理不活跃的匿名账号
+      return { user: realUser, merged: true }
+    }
+
+    return { user: realUser, merged: false }
+  }
+
   // Sign in with email and password (for existing users)
   const signInWithEmail = async (email: string, password: string) => {
     const auth = getFirebaseAuth()
@@ -94,8 +158,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getFirebaseAuth()
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password)
-      if (displayName && result.user) {
-        await updateProfile(result.user, { displayName })
+      // 如果没有提供displayName，使用邮箱@前面的部分
+      const finalDisplayName = displayName || email.split('@')[0]
+      if (result.user) {
+        await updateProfile(result.user, { displayName: finalDisplayName })
       }
     } catch (error: any) {
       console.error('邮箱注册失败:', error.message)
@@ -129,6 +195,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // This would be implemented based on your backend API
       await migrateUserData(currentUser.uid, result.user.uid)
       
+      // 手动更新状态，因为 linkWithCredential 不会触发 onAuthStateChanged
+      setUser(result.user)
+      setIsAnonymous(false)
+      
       return result.user
     } catch (error: any) {
       console.error('账号绑定失败:', error.message)
@@ -155,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isAnonymous,
         currentTeamId,
+        smartLogin,
         signInWithEmail,
         signUpWithEmail,
         linkAnonymousAccount,
@@ -174,22 +245,42 @@ export function useAuth() {
   return context
 }
 
+// Helper function to wait for Firebase to be ready and get token
+async function waitForFirebaseToken(firebaseUser: User, maxRetries = 3): Promise<string | null> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Wait a bit for Firebase to initialize
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * i))
+      }
+      const token = await firebaseUser.getIdToken(true)
+      if (token) {
+        return token
+      }
+    } catch (error) {
+      console.warn(`Attempt ${i + 1}/${maxRetries} to get token failed:`, error)
+      if (i === maxRetries - 1) {
+        return null
+      }
+    }
+  }
+  return null
+}
+
 // Helper function to sync user with backend
 async function syncUserToBackend(firebaseUser: User) {
   try {
-    // Get Firebase ID token
-    let idToken: string
-    try {
-      idToken = await firebaseUser.getIdToken(true) // Force refresh to ensure valid token
-    } catch (tokenError) {
-      console.error('Unable to get authentication token:', tokenError)
+    // Get Firebase ID token with retry logic
+    const idToken = await waitForFirebaseToken(firebaseUser)
+    if (!idToken) {
+      console.error('Unable to get authentication token after retries')
       return
     }
 
     // Sync user with backend
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
     
-    // Wait 1 second before syncing
+    // Wait 1 second to prevent "token used too early" errors due to clock skew
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     let syncResponse: Response
@@ -234,19 +325,17 @@ async function syncUserToBackend(firebaseUser: User) {
 }
 async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
   try {
-    // Get Firebase ID token
-    let idToken: string
-    try {
-      idToken = await firebaseUser.getIdToken(true) // Force refresh to ensure valid token
-    } catch (tokenError) {
-      console.error('Unable to get authentication token:', tokenError)
+    // Get Firebase ID token with retry logic
+    const idToken = await waitForFirebaseToken(firebaseUser)
+    if (!idToken) {
+      console.error('Unable to get authentication token after retries')
       return null
     }
 
     // Sync user with backend
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
     
-    // Wait 1 second before syncing
+    // Wait 1 second to prevent "token used too early" errors due to clock skew
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     let syncResponse: Response

@@ -13,10 +13,26 @@ export interface SimilarProduct {
   source?: string
 }
 
+export interface SeverityItem {
+  severity: string
+  severity_rowspan: number
+  count: number
+  last_edit_by: string
+  last_edit_by_name: string | null
+  last_edit_at: string
+}
+
+export interface PotentialHarmItem {
+  potential_harm: string
+  harm_rowspan: number
+  potential_harm_list: SeverityItem[]
+}
+
 export interface Hazard {
   hazard: string
-  potentialHarm: string
-  severity: string[]
+  hazard_count: number
+  hazard_rowspan: number
+  hazard_list: PotentialHarmItem[]
 }
 
 export type WorkflowStep = 

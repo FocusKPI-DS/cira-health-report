@@ -268,5 +268,87 @@ export const analysisApi = {
     
     const data = await response.json()
     return data.analyses || []
+  },
+
+  /**
+   * Fetch group records for a specific hazard, potential harm, and severity combination
+   * @param analysisId The analysis ID
+   * @param hazard The hazard name
+   * @param potentialHarm The potential harm description
+   * @param severity The severity level
+   * @returns Group records with hazardous situations
+   */
+  async fetchGroupRecords(analysisId: string, hazard: string, potentialHarm: string, severity: string): Promise<any> {
+    const headers = await getAuthHeaders()
+    const params = new URLSearchParams({
+      hazard,
+      potential_harm: potentialHarm,
+      severity
+    })
+    
+    const response = await fetch(
+      `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/group-records?${params.toString()}`,
+      {
+        method: 'GET',
+        headers,
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to fetch group records' }))
+      throw new Error(error.detail || 'Failed to fetch group records')
+    }
+    
+    return response.json()
+  },
+
+  /**
+   * Get filter settings for an analysis
+   * @param analysisId The analysis ID
+   * @returns Filter settings including automatic_settings_enabled
+   */
+  async getAnalysisFilters(analysisId: string): Promise<any> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/full_filters`,
+      {
+        method: 'GET',
+        headers,
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to fetch analysis filters' }))
+      throw new Error(error.detail || 'Failed to fetch analysis filters')
+    }
+    
+    return response.json()
+  },
+
+  /**
+   * Restart full analysis by clearing existing data and regenerating with updated filters
+   * @param analysisId The analysis ID to restart
+   * @returns Response with new task_id and analysis info
+   */
+  async restartFullAnalysis(analysisId: string): Promise<any> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_URL}/api/v1/anonclient/restart-full-analysis`,
+      {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ analysis_id: analysisId }),
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to restart analysis' }))
+      throw new Error(error.detail || 'Failed to restart analysis')
+    }
+    
+    return response.json()
   }
 }

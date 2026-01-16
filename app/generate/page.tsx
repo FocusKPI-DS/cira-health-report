@@ -73,7 +73,7 @@ function GenerateContent() {
 
   return (
     <main className={styles.main}>
-      <Header showAuthButtons={true} />
+      <Header showAuthButtons={true} showUserMenu={true} />
 
       <div className={styles.container}>
         <GenerateWorkflowContent
@@ -104,6 +104,7 @@ function GenerateContent() {
           productName={workflow.productName}
           intendedUse={workflow.intendedUse}
           hazards={reportData}
+          analysisId={workflow.analysisId}
           onClose={() => setShowReportModal(false)}
         />
       )}

@@ -39,9 +39,11 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
           <button className={styles.enterpriseButton} onClick={() => {}}>
             Go to Enterprise Version
           </button>
+          {!shouldShowUserMenu && 
           <button className={styles.loginButton} onClick={handleLogin}>
-            {loading ? 'Loading...' : (isAnonymous ? 'Bind Account' : 'Login / Sign Up')}
+            Login / Sign Up
           </button>
+          }
         </div>
       </div>
     </div>

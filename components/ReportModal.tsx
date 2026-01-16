@@ -6,53 +6,28 @@ import styles from './ReportModal.module.css'
 import { InfoIcon } from './Icons'
 import PHADetailsModal from './PHADetailsModal'
 import SignInModal from './SignInModal'
-
-interface Hazard {
-  hazard: string
-  potentialHarm: string
-  severity: string[]
-}
-
-interface PHADetails {
-  hazard: string
-  potentialHarm: string
-  severity: string[]
-  hazardousSituations: {
-    id: string
-    situation: string
-    severityReasoning: string
-    referenceLink?: string
-  }[]
-}
+import { Hazard } from '@/lib/types'
 
 interface ReportModalProps {
   productName: string
   intendedUse: string
   hazards: Hazard[]
+  analysisId: string | null
   onClose: () => void
 }
 
-export default function ReportModal({ productName, intendedUse, hazards, onClose }: ReportModalProps) {
+export default function ReportModal({ productName, intendedUse, hazards, analysisId, onClose }: ReportModalProps) {
   const router = useRouter()
   const [showPHADetailsModal, setShowPHADetailsModal] = useState(false)
-  const [selectedHazard, setSelectedHazard] = useState<PHADetails | null>(null)
+  const [selectedHazard, setSelectedHazard] = useState<string>('')
+  const [selectedPotentialHarm, setSelectedPotentialHarm] = useState<string>('')
+  const [selectedSeverity, setSelectedSeverity] = useState<string>('')
   const [showSignInModal, setShowSignInModal] = useState(false)
 
-  const handleInfoClick = (hazard: Hazard, severity: string) => {
-    const phaDetails: PHADetails = {
-      hazard: hazard.hazard,
-      potentialHarm: hazard.potentialHarm,
-      severity: [severity], // Only show the selected severity
-      hazardousSituations: [
-        {
-          id: '1',
-          situation: 'The user experienced a device that could not maintain a charge, leading to uncertainty about its operational status.',
-          severityReasoning: 'The device was physically damaged and unable to hold a charge, which could lead to inconvenience and temporary issues but did not result in any reported injuries requiring medical intervention.',
-          referenceLink: 'https://www.fda.gov/medical-devices/device-advice-comprehensive-regulatory-assistance/medical-device-databases'
-        }
-      ]
-    }
-    setSelectedHazard(phaDetails)
+  const handleInfoClick = (hazardName: string, potentialHarm: string, severity: string) => {
+    setSelectedHazard(hazardName)
+    setSelectedPotentialHarm(potentialHarm)
+    setSelectedSeverity(severity)
     setShowPHADetailsModal(true)
   }
 
@@ -119,52 +94,70 @@ export default function ReportModal({ productName, intendedUse, hazards, onClose
                 </tr>
               </thead>
               <tbody>
-                {hazards.flatMap((hazard, hazardIndex) => 
-                  hazard.severity.map((sev, severityIndex) => {
-                    let severityClass = styles.negligible
-                    if (sev === 'Minor') severityClass = styles.minor
-                    else if (sev === 'Moderate') severityClass = styles.moderate
-                    else if (sev === 'Critical') severityClass = styles.critical
-                    else if (sev === 'Major') severityClass = styles.moderate // Use moderate style for Major
+                {hazards.map((hazard, hazardIndex) => {
+                  let isFirstHazardRow = true
+                  const rows: JSX.Element[] = []
+                  
+                  hazard.hazard_list?.forEach((harmItem, harmIndex) => {
+                    let isFirstHarmRow = true
                     
-                    const row = (
-                      <tr key={`${hazardIndex}-${severityIndex}`} className={styles.tr}>
-                        {severityIndex === 0 && (
-                          <td className={styles.td} rowSpan={hazard.severity.length}>
-                            {hazard.hazard}
+                    harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
+                      let severityClass = styles.negligible
+                      if (severityItem.severity === 'Minor') severityClass = styles.minor
+                      else if (severityItem.severity === 'Moderate') severityClass = styles.moderate
+                      else if (severityItem.severity === 'Critical') severityClass = styles.critical
+                      else if (severityItem.severity === 'Major') severityClass = styles.moderate
+                      
+                      rows.push(
+                        <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
+                          {isFirstHazardRow && (
+                            <td className={styles.td} rowSpan={hazard.hazard_rowspan}>
+                              {hazard.hazard}
+                            </td>
+                          )}
+                          {isFirstHarmRow && (
+                            <td className={styles.td} rowSpan={harmItem.harm_rowspan}>
+                              {harmItem.potential_harm}
+                            </td>
+                          )}
+                          <td className={styles.td}>
+                            <span className={`${styles.severityBadge} ${severityClass}`}>
+                              {severityItem.severity}
+                            </span>
                           </td>
-                        )}
-                        <td className={styles.td}>{hazard.potentialHarm}</td>
-                        <td className={styles.td}>
-                          <span className={`${styles.severityBadge} ${severityClass}`}>
-                            {sev}
-                          </span>
-                        </td>
-                        <td className={styles.td}>
-                          <button 
-                            className={styles.infoButton} 
-                            title="Detail"
-                            onClick={() => handleInfoClick(hazard, sev)}
-                          >
-                            <InfoIcon />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                    return row
+                          <td className={styles.td}>
+                            <button 
+                              className={styles.infoButton} 
+                              title="Detail"
+                              onClick={() => handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)}
+                            >
+                              <InfoIcon />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                      
+                      isFirstHazardRow = false
+                      isFirstHarmRow = false
+                    })
                   })
-                )}
+                  
+                  return rows
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      {showPHADetailsModal && selectedHazard && (
+      {showPHADetailsModal && (
         <PHADetailsModal
           isOpen={showPHADetailsModal}
           onClose={() => setShowPHADetailsModal(false)}
+          analysisId={analysisId}
           hazard={selectedHazard}
+          potentialHarm={selectedPotentialHarm}
+          severity={selectedSeverity}
         />
       )}
 

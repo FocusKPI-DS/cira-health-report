@@ -415,11 +415,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     }
 
     try {
-      const hazards = await analysisApi.fetchTransformedResults(analysisId)
-      if (hazards.length === 0) {
+      const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
+      if (!response.results || response.results.length === 0) {
         throw new Error('No hazards found in the analysis')
       }
-      return hazards
+      return response.results
     } catch (error) {
       console.error('[Analysis] Error fetching results:', error)
       throw error

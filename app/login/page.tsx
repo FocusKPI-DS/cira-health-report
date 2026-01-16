@@ -7,7 +7,7 @@ import styles from './page.module.css'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { isAnonymous, signInWithEmail, signUpWithEmail, linkAnonymousAccount } = useAuth()
+  const { isAnonymous, smartLogin } = useAuth()
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,20 +21,12 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      if (isAnonymous) {
-        // If user is currently anonymous, link their account to email/password
-        console.log('绑定匿名账号到邮箱...')
-        await linkAnonymousAccount(email, password, isSignUp ? name : undefined)
-        console.log('账号绑定成功，数据已迁移')
-        alert('账号绑定成功！您的数据已保留。')
-      } else if (isSignUp) {
-        // Create new account
-        await signUpWithEmail(email, password, name)
-        console.log('注册成功')
-      } else {
-        // Sign in with existing account
-        await signInWithEmail(email, password)
-        console.log('登录成功')
+      // 统一使用 smartLogin 自动处理升级/注册/登录/合并
+      const result = await smartLogin(email, password, name)
+      console.log('认证成功:', result.merged ? '已合并数据' : '直接登录')
+      
+      if (result.merged) {
+        console.log('✅ 匿名账号数据已成功合并')
       }
       
       // Redirect to reports page after successful login
@@ -53,8 +45,8 @@ export default function LoginPage() {
         setError('账号不存在，请先注册')
       } else if (err.code === 'auth/wrong-password') {
         setError('密码错误，请重试')
-      } else if (err.code === 'auth/credential-already-in-use') {
-        setError('该邮箱已被其他账号使用')
+      } else if (err.code === 'auth/invalid-credential') {
+        setError('邮箱或密码错误')
       } else {
         setError(err.message || '操作失败，请重试')
       }
@@ -68,16 +60,12 @@ export default function LoginPage() {
       <div className={styles.container}>
         <div className={styles.header}>
           <h1 className={styles.title}>
-            {isAnonymous 
-              ? '绑定您的账号' 
-              : (isSignUp ? 'Create Account' : 'Welcome Back')}
+            {isSignUp ? 'Create Account' : 'Welcome Back'}
           </h1>
           <p className={styles.subtitle}>
-            {isAnonymous
-              ? '将您的临时账号绑定到邮箱，永久保存您的数据'
-              : (isSignUp 
-                ? 'Sign up to access full PHA analysis features'
-                : 'Sign in to access your PHA analysis')}
+            {isSignUp 
+              ? 'Sign up to access full PHA analysis features'
+              : 'Sign in to access your PHA analysis'}
           </p>
         </div>
 
@@ -88,7 +76,7 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          {(isSignUp || isAnonymous) && (
+          {isSignUp && (
             <div className={styles.formGroup}>
               <label htmlFor="name" className={styles.label}>
                 Full Name
@@ -100,7 +88,7 @@ export default function LoginPage() {
                 onChange={(e) => setName(e.target.value)}
                 className={styles.input}
                 placeholder="Enter your full name"
-                required={isSignUp}
+                required
               />
             </div>
           )}
@@ -145,30 +133,26 @@ export default function LoginPage() {
           >
             {loading 
               ? '处理中...' 
-              : (isAnonymous 
-                ? '绑定账号' 
-                : (isSignUp ? 'Sign Up' : 'Sign In'))}
+              : (isSignUp ? 'Sign Up' : 'Sign In')}
           </button>
         </form>
 
-        {!isAnonymous && (
-          <div className={styles.footer}>
-            <p className={styles.footerText}>
-              {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-              <button 
-                type="button"
-                className={styles.toggleButton}
-                onClick={() => {
-                  setIsSignUp(!isSignUp)
-                  setError('')
-                }}
-                disabled={loading}
-              >
-                {isSignUp ? 'Sign In' : 'Sign Up'}
-              </button>
-            </p>
-          </div>
-        )}
+        <div className={styles.footer}>
+          <p className={styles.footerText}>
+            {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+            <button 
+              type="button"
+              className={styles.toggleButton}
+              onClick={() => {
+                setIsSignUp(!isSignUp)
+                setError('')
+              }}
+              disabled={loading}
+            >
+              {isSignUp ? 'Sign In' : 'Sign Up'}
+            </button>
+          </p>
+        </div>
       </div>
     </main>
   )

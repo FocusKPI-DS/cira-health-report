@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
 import SignInModal from '@/components/SignInModal'
-import PaymentModal from '@/components/PaymentModal'
 import PHADetailsModal from '@/components/PHADetailsModal'
 import GenerateWorkflowModal from '@/components/GenerateWorkflowModal'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
@@ -13,24 +12,26 @@ import { InfoIcon, DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { analysisApi } from '@/lib/analysis-api'
 
+interface SeverityItem {
+  severity: string
+  severity_rowspan: number
+  count: number
+  last_edit_by: string
+  last_edit_by_name: string | null
+  last_edit_at: string
+}
+
+interface PotentialHarmItem {
+  potential_harm: string
+  harm_rowspan: number
+  potential_harm_list: SeverityItem[]
+}
+
 interface Hazard {
   hazard: string
-  potentialHarm: string
-  severity: string[]
-}
-
-interface HazardousSituation {
-  id: string
-  situation: string
-  severityReasoning: string
-  referenceLink?: string
-}
-
-interface PHADetails {
-  hazard: string
-  potentialHarm: string
-  severity: string[]
-  hazardousSituations: HazardousSituation[]
+  hazard_count: number
+  hazard_rowspan: number
+  hazard_list: PotentialHarmItem[]
 }
 
 interface Report {
@@ -48,9 +49,10 @@ function ResultsContent() {
   const [productName, setProductName] = useState('')
   const [intendedUse, setIntendedUse] = useState('')
   const [showSignInModal, setShowSignInModal] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showPHADetailsModal, setShowPHADetailsModal] = useState(false)
-  const [selectedHazard, setSelectedHazard] = useState<PHADetails | null>(null)
+  const [selectedHazard, setSelectedHazard] = useState<string>('')
+  const [selectedPotentialHarm, setSelectedPotentialHarm] = useState<string>('')
+  const [selectedSeverity, setSelectedSeverity] = useState<string>('')
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -60,6 +62,7 @@ function ResultsContent() {
   const [isLoadingReports, setIsLoadingReports] = useState(false)
   const [isLoadingHazards, setIsLoadingHazards] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
+  const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -107,9 +110,23 @@ function ResultsContent() {
       setIsLoadingHazards(true)
       try {
         console.log('[Results] Fetching hazard data for analysis_id:', analysisId)
-        const hazards = await analysisApi.fetchTransformedResults(analysisId, 1, 100)
-        console.log('[Results] Fetched hazards:', hazards)
-        setCurrentHazards(hazards)
+        const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
+        console.log('[Results] Fetched results:', response)
+        console.log('[Results] Results array:', response.results)
+        if (response.results && response.results.length > 0) {
+          console.log('[Results] First hazard structure:', JSON.stringify(response.results[0], null, 2))
+        }
+        setCurrentHazards(response.results || [])
+        
+        // Fetch filter settings to check automatic_settings_enabled
+        try {
+          const filters = await analysisApi.getAnalysisFilters(analysisId)
+          console.log('[Results] Fetched filters:', filters)
+          setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
+        } catch (filterError) {
+          console.error('[Results] Error fetching filters:', filterError)
+          setAutomaticSettingsEnabled(false)
+        }
       } catch (error) {
         console.error('[Results] Error fetching hazard data:', error)
         setCurrentHazards([])
@@ -174,35 +191,67 @@ function ResultsContent() {
   }
 
   const handleDownload = () => {
-    setShowPaymentModal(true)
-  }
-
-  const handleClosePayment = () => {
-    setShowPaymentModal(false)
-  }
-
-  const handlePaymentSuccess = () => {
-    setShowPaymentModal(false)
-    // Trigger download
-    alert('Download starting... (In production, this would download the full report)')
-  }
-
-  const handleInfoClick = (hazard: Hazard, severity: string) => {
-    // Create PHADetails from hazard with mock hazardous situations
-    const phaDetails: PHADetails = {
-      hazard: hazard.hazard,
-      potentialHarm: hazard.potentialHarm,
-      severity: [severity], // Only show the selected severity
-      hazardousSituations: [
-        {
-          id: '1',
-          situation: 'The user experienced a device that could not maintain a charge, leading to uncertainty about its operational status.',
-          severityReasoning: 'The device was physically damaged and unable to hold a charge, which could lead to inconvenience and temporary issues but did not result in any reported injuries requiring medical intervention.',
-          referenceLink: 'https://www.fda.gov/medical-devices/device-advice-comprehensive-regulatory-assistance/medical-device-databases'
-        }
-      ]
+    // If user is anonymous, show sign-in modal
+    if (!user || isAnonymous) {
+      setShowSignInModal(true)
+      return
     }
-    setSelectedHazard(phaDetails)
+
+    // Real user handling
+    if (automaticSettingsEnabled) {
+      // If automatic settings is enabled, trigger restart full analysis
+      handleRestartFullAnalysis()
+    } else {
+      // If automatic settings is disabled, show download (currently just alert)
+      alert('Download functionality will be implemented here. This would download the full report.')
+    }
+  }
+
+  const handleRestartFullAnalysis = async () => {
+    if (!analysisId) {
+      alert('No analysis ID available')
+      return
+    }
+
+    try {
+      console.log('[Results] Restarting full analysis for:', analysisId)
+      const response = await analysisApi.restartFullAnalysis(analysisId)
+      console.log('[Results] Restart response:', response)
+      
+      // Show generating state
+      setIsGenerating(true)
+      
+      // Navigate to the results page with generating flag
+      router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
+      
+      // Poll for completion
+      const pollStatus = async () => {
+        try {
+          const status = await analysisApi.checkAnalysisStatus(analysisId)
+          if (status.status !== 'Generating') {
+            setIsGenerating(false)
+            // Reload the page to show new results
+            window.location.reload()
+          } else {
+            setTimeout(pollStatus, 5000)
+          }
+        } catch (error) {
+          console.error('[Results] Error polling status:', error)
+          setIsGenerating(false)
+        }
+      }
+      
+      setTimeout(pollStatus, 5000)
+    } catch (error) {
+      console.error('[Results] Error restarting analysis:', error)
+      alert('Failed to restart analysis. Please try again.')
+    }
+  }
+
+  const handleInfoClick = (hazardName: string, potentialHarm: string, severity: string) => {
+    setSelectedHazard(hazardName)
+    setSelectedPotentialHarm(potentialHarm)
+    setSelectedSeverity(severity)
     setShowPHADetailsModal(true)
   }
 
@@ -252,7 +301,7 @@ function ResultsContent() {
                     report_list.map((report) => (
                       <button
                         key={report.id}
-                        className={`${styles.historyItem} ${productName === report.productName ? styles.active : ''}`}
+                        className={`${styles.historyItem} ${analysisId === report.id ? styles.active : ''}`}
                         onClick={() => handleViewReport(report)}
                       >
                         <div className={styles.historyItemHeader}>
@@ -297,7 +346,7 @@ function ResultsContent() {
               {user && !isAnonymous && (
                 <button className={styles.downloadButton} onClick={handleDownload}>
                   <DownloadIcon />
-                  Download Full Report
+                  {automaticSettingsEnabled ? 'Generate Whole Report' : 'Download Full Report'}
                 </button>
               )}
             </div>
@@ -323,40 +372,56 @@ function ResultsContent() {
               </tr>
             </thead>
             <tbody>
-              {hazards.flatMap((hazard, hazardIndex) => 
-                hazard.severity.map((sev, severityIndex) => {
-                  let severityClass = styles.negligible
-                  if (sev === 'Minor') severityClass = styles.minor
-                  else if (sev === 'Moderate') severityClass = styles.moderate
-                  else if (sev === 'Critical') severityClass = styles.critical
-                  else if (sev === 'Major') severityClass = styles.moderate // Use moderate style for Major
+              {hazards.map((hazard, hazardIndex) => {
+                let isFirstHazardRow = true
+                const rows: JSX.Element[] = []
+                
+                hazard.hazard_list?.forEach((harmItem, harmIndex) => {
+                  let isFirstHarmRow = true
                   
-                  return (
-                    <tr key={`${hazardIndex}-${severityIndex}`} className={styles.tr}>
-                      {severityIndex === 0 && (
-                        <td className={styles.td} rowSpan={hazard.severity.length}>
-                          {hazard.hazard}
+                  harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
+                    let severityClass = styles.negligible
+                    if (severityItem.severity === 'Minor') severityClass = styles.minor
+                    else if (severityItem.severity === 'Moderate') severityClass = styles.moderate
+                    else if (severityItem.severity === 'Critical') severityClass = styles.critical
+                    else if (severityItem.severity === 'Major') severityClass = styles.moderate
+                    
+                    rows.push(
+                      <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
+                        {isFirstHazardRow && (
+                          <td className={styles.td} rowSpan={hazard.hazard_rowspan}>
+                            {hazard.hazard}
+                          </td>
+                        )}
+                        {isFirstHarmRow && (
+                          <td className={styles.td} rowSpan={harmItem.harm_rowspan}>
+                            {harmItem.potential_harm}
+                          </td>
+                        )}
+                        <td className={styles.td}>
+                          <span className={`${styles.severityBadge} ${severityClass}`}>
+                            {severityItem.severity}
+                          </span>
                         </td>
-                      )}
-                      <td className={styles.td}>{hazard.potentialHarm}</td>
-                      <td className={styles.td}>
-                        <span className={`${styles.severityBadge} ${severityClass}`}>
-                          {sev}
-                        </span>
-                      </td>
-                      <td className={styles.td}>
-                        <button 
-                          className={styles.infoButton} 
-                          title="Detail"
-                          onClick={() => handleInfoClick(hazard, sev)}
-                        >
-                          <InfoIcon />
-                        </button>
-                      </td>
-                    </tr>
-                  )
+                        <td className={styles.td}>
+                          <button 
+                            className={styles.infoButton} 
+                            title="Detail"
+                            onClick={() => handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)}
+                          >
+                            <InfoIcon />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                    
+                    isFirstHazardRow = false
+                    isFirstHarmRow = false
+                  })
                 })
-              )}
+                
+                return rows
+              })}
             </tbody>
           </table>
         </div>
@@ -375,11 +440,13 @@ function ResultsContent() {
       </div>
 
       {showSignInModal && <SignInModal onClose={handleCloseModal} onSuccess={handleSignInSuccess} />}
-      {showPaymentModal && <PaymentModal onClose={handleClosePayment} onSuccess={handlePaymentSuccess} />}
       <PHADetailsModal 
         isOpen={showPHADetailsModal}
         onClose={() => setShowPHADetailsModal(false)}
+        analysisId={analysisId}
         hazard={selectedHazard}
+        potentialHarm={selectedPotentialHarm}
+        severity={selectedSeverity}
       />
 
       <GenerateWorkflowModal

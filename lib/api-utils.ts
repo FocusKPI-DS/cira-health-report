@@ -24,25 +24,41 @@ export async function getCurrentUserId(): Promise<string | null> {
 }
 
 /**
- * Get a valid Firebase ID token
- * @returns The Firebase ID token or null if unavailable
+ * Get a valid Firebase ID token with retry logic
+ * @param maxRetries Maximum number of retry attempts (default: 3)
+ * @returns The Firebase ID token or null if unavailable after retries
  */
-async function getValidToken(): Promise<string | null> {
-  try {
-    const auth = getFirebaseAuth()
-    const user = auth.currentUser
-    
-    if (!user) {
-      return null
+async function getValidToken(maxRetries: number = 3): Promise<string | null> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const auth = getFirebaseAuth()
+      const user = auth.currentUser
+      
+      if (!user) {
+        // Wait before retry if Firebase hasn't initialized yet
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)))
+          continue
+        }
+        return null
+      }
+      
+      // Get Firebase ID token (automatically refreshes if needed)
+      const token = await user.getIdToken(true) // Force refresh to ensure valid token
+      if (token) {
+        return token
+      }
+    } catch (error) {
+      console.warn(`Attempt ${i + 1}/${maxRetries} to get token failed:`, error)
+      if (i === maxRetries - 1) {
+        console.error('Failed to get Firebase token after retries:', error)
+        return null
+      }
+      // Wait before retry with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)))
     }
-    
-    // Get Firebase ID token (automatically refreshes if needed)
-    const token = await user.getIdToken()
-    return token
-  } catch (error) {
-    console.error('Failed to get Firebase token:', error)
-    return null
   }
+  return null
 }
 
 /**
