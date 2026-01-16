@@ -23,20 +23,20 @@ export default function SignInModal({ onClose, onSuccess }: SignInModalProps) {
 
     try {
       const result = await smartLogin(email, password)
-      console.log('登录成功:', result.merged ? '已合并数据' : '直接登录')
+      console.log('Login successful:', result.merged ? 'Data merged' : 'Direct login')
       onSuccess()
     } catch (err: any) {
-      console.error('登录错误:', err)
+      console.error('Login error:', err)
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-        setError('邮箱或密码错误')
+        setError('Invalid email or password')
       } else if (err.code === 'auth/user-not-found') {
-        setError('账号不存在，请先注册')
+        setError('Account does not exist, please sign up first')
       } else if (err.code === 'auth/invalid-email') {
-        setError('邮箱格式不正确')
+        setError('Invalid email format')
       } else if (err.code === 'auth/weak-password') {
-        setError('密码强度不够，请使用至少6个字符')
+        setError('Password is too weak, please use at least 6 characters')
       } else {
-        setError(err.message || '登录失败，请重试')
+        setError(err.message || 'Login failed, please try again')
       }
     } finally {
       setLoading(false)

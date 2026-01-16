@@ -85,56 +85,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Smart login: automatically handles anonymous upgrade, login, and data merge
   const smartLogin = async (email: string, password: string, displayName?: string): Promise<SmartLoginResult> => {
-    console.log('开始智能登录流程...')
+    console.log('Starting smart login flow...')
     const auth = getFirebaseAuth()
     const anonUser = auth.currentUser
     
     const credential = EmailAuthProvider.credential(email, password)
 
-    // 如果没有提供displayName，使用邮箱@前面的部分
+    // If no displayName provided, use the part before @ in the email
     const finalDisplayName = displayName || email.split('@')[0]
 
     console.log('anonUser:', anonUser ? `${anonUser.isAnonymous ? 'Anonymous User' : 'Authenticated User'} (${anonUser.uid})` : 'No User')
-    // 1️⃣ 匿名用户，优先尝试升级
+    // 1️⃣ Anonymous user, try to upgrade first
     if (anonUser?.isAnonymous) {
       try {
         const linkResult = await linkWithCredential(anonUser, credential)
-        console.log('匿名账号升级成功:', linkResult.user.email)
+        console.log('Anonymous account upgraded successfully:', linkResult.user.email)
         
         // Update display name
         if (linkResult.user) {
           await updateProfile(linkResult.user, { displayName: finalDisplayName })
         }
         
-        // 手动更新状态，因为 linkWithCredential 不会触发 onAuthStateChanged
+        // Manually update state, as linkWithCredential doesn't trigger onAuthStateChanged
         setUser(linkResult.user)
         setIsAnonymous(false)
         
         return { user: linkResult.user, merged: false }
       } catch (err: any) {
-        // 捕获邮箱已存在的两种错误代码
+        // Catch both error codes for email already exists
         if (err.code !== 'auth/credential-already-in-use' && err.code !== 'auth/email-already-in-use') {
           throw err
         }
-        // 冲突，继续走登录流程
-        console.log('邮箱已存在，继续登录并合并数据...')
+        // Conflict, continue with login flow
+        console.log('Email already exists, continuing with login and data merge...')
       }
     }
 
-    // 2️⃣ 正常登录
+    // 2️⃣ Normal login
     const result = await signInWithEmailAndPassword(auth, email, password)
     const realUser = result.user
-    console.log('登录成功:', realUser.email)
+    console.log('Login successful:', realUser.email)
 
-    // 3️⃣ 有匿名账号才需要合并
+    // 3️⃣ Only merge if there's an anonymous account
     if (anonUser && anonUser.uid !== realUser.uid) {
-      console.log('检测到匿名账号，开始合并数据...')
+      console.log('Anonymous account detected, starting data merge...')
       await migrateUserData(realUser, anonUser.uid)
-      console.log('✅ 数据合并完成，匿名账号将自动失效')
-      // 注意：不需要手动删除匿名账号，因为：
-      // 1. 登录后匿名账号的认证上下文已失效，无法删除（会报 admin-restricted-operation 错误）
-      // 2. 数据已经迁移，匿名账号不会再被使用
-      // 3. Firebase 会自动清理不活跃的匿名账号
+      console.log('✅ Data merge completed, anonymous account will be automatically invalidated')
+      // Note: No need to manually delete anonymous account because:
+      // 1. After login, the anonymous account's auth context is invalidated, cannot be deleted (would get admin-restricted-operation error)
+      // 2. Data has been migrated, anonymous account will not be used again
+      // 3. Firebase will automatically clean up inactive anonymous accounts
       return { user: realUser, merged: true }
     }
 
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password)
-      // 如果没有提供displayName，使用邮箱@前面的部分
+      // If no displayName provided, use the part before @ in the email
       const finalDisplayName = displayName || email.split('@')[0]
       if (result.user) {
         await updateProfile(result.user, { displayName: finalDisplayName })

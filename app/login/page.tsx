@@ -21,12 +21,12 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // 统一使用 smartLogin 自动处理升级/注册/登录/合并
+      // Use smartLogin to automatically handle upgrade/registration/login/merge
       const result = await smartLogin(email, password, name)
-      console.log('认证成功:', result.merged ? '已合并数据' : '直接登录')
+      console.log('Authentication successful:', result.merged ? 'Data merged' : 'Direct login')
       
       if (result.merged) {
-        console.log('✅ 匿名账号数据已成功合并')
+        console.log('✅ Anonymous account data successfully merged')
       }
       
       // Redirect to reports page after successful login
