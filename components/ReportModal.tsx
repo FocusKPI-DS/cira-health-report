@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState,JSX } from 'react'
 import { useRouter } from 'next/navigation'
 import styles from './ReportModal.module.css'
 import { InfoIcon } from './Icons'
