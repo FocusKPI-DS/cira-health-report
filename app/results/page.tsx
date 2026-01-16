@@ -606,7 +606,6 @@ function ResultsContent() {
               })}
             </tbody>
           </table>
-          <button onClick={() => setShowPaymentModal(true)}>Try payment</button>
         </div>
             )}
 
