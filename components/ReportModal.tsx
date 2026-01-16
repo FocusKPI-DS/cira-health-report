@@ -7,6 +7,7 @@ import { InfoIcon } from './Icons'
 import PHADetailsModal from './PHADetailsModal'
 import SignInModal from './SignInModal'
 import { Hazard } from '@/lib/types'
+import { useAuth } from '@/lib/auth'
 
 interface ReportModalProps {
   productName: string
@@ -18,6 +19,7 @@ interface ReportModalProps {
 
 export default function ReportModal({ productName, intendedUse, hazards, analysisId, onClose }: ReportModalProps) {
   const router = useRouter()
+  const { user, isAnonymous } = useAuth()
   const [showPHADetailsModal, setShowPHADetailsModal] = useState(false)
   const [selectedHazard, setSelectedHazard] = useState<string>('')
   const [selectedPotentialHarm, setSelectedPotentialHarm] = useState<string>('')
@@ -32,7 +34,25 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
   }
 
   const handleGenerateReport = () => {
-    setShowSignInModal(true)
+    // If user is anonymous, show sign-in modal
+    if (!user || isAnonymous) {
+      setShowSignInModal(true)
+    } else {
+      // If user is signed in, directly navigate to results page
+      onClose() // Close the preview modal
+      const params = new URLSearchParams({
+        productName: productName,
+        generating: 'true'
+      })
+      if (intendedUse) {
+        params.append('intendedUse', intendedUse)
+      }
+      if (analysisId) {
+        params.append('analysis_id', analysisId)
+      }
+      params.append('restart','1')
+      router.push(`/results?${params.toString()}`)
+    }
   }
 
   const handleSignInSuccess = () => {
@@ -46,6 +66,10 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
     if (intendedUse) {
       params.append('intendedUse', intendedUse)
     }
+    if (analysisId) {
+      params.append('analysis_id', analysisId)
+    }
+    params.append('restart','1')
     router.push(`/results?${params.toString()}`)
   }
 

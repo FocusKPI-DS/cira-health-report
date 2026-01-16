@@ -65,6 +65,8 @@ function ResultsContent() {
   const [isLoadingHazards, setIsLoadingHazards] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
+  const [shouldRestart, setShouldRestart] = useState<boolean>(false)
+  const [hasTriggeredRestart, setHasTriggeredRestart] = useState<boolean>(false)
   const [progressData, setProgressData] = useState<{
     totalDetailRecords: number
     planTotalRecords: number
@@ -88,6 +90,7 @@ function ResultsContent() {
     const use = searchParams.get('intendedUse') || ''
     const generatingParam = searchParams.get('generating')
     const analysisIdParam = searchParams.get('analysis_id')
+    const restartParam = searchParams.get('restart')
     
     if (product) {
       setProductName(product)
@@ -97,6 +100,9 @@ function ResultsContent() {
     }
     if (analysisIdParam) {
       setAnalysisId(analysisIdParam)
+    }
+    if (restartParam === '1') {
+      setShouldRestart(true)
     }
     
     // If generating flag is present, show generating state
@@ -193,6 +199,82 @@ function ResultsContent() {
     
     fetchReportListData()
   }, [user, authLoading])
+
+  // Auto-trigger restart if restart=1 parameter is present
+  useEffect(() => {
+    if (shouldRestart && analysisId && !isLoadingHazards && !isGenerating && !hasTriggeredRestart) {
+      console.log('[Results] Auto-triggering restart for analysis:', analysisId)
+      setHasTriggeredRestart(true)
+      setShouldRestart(false)
+      
+      // Remove restart parameter from URL
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('restart')
+      router.replace(`/results?${params.toString()}`)
+      
+      // Trigger the restart by calling the function inline
+      ;(async () => {
+        if (!analysisId) {
+          alert('No analysis ID available')
+          return
+        }
+
+        try {
+          console.log('[Results] Restarting full analysis for:', analysisId)
+          const response = await analysisApi.restartFullAnalysis(analysisId)
+          console.log('[Results] Restart response:', response)
+          
+          // Immediately fetch updated filter settings to get the new automatic_settings_enabled status
+          try {
+            const filters = await analysisApi.getAnalysisFilters(analysisId)
+            console.log('[Results] Updated filters after restart:', filters)
+            setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
+          } catch (filterError) {
+            console.error('[Results] Error fetching updated filters:', filterError)
+          }
+          
+          // Show generating state
+          setIsGenerating(true)
+          
+          // Navigate to the results page with generating flag
+          router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
+          
+          // Poll for completion
+          const pollStatus = async () => {
+            try {
+              const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
+              if (response.status !== 'Generating') {
+                setIsGenerating(false)
+                setProgressData(null)
+                // Reload the page to show new results
+                window.location.reload()
+              } else {
+                // Update progress data during polling
+                setProgressData({
+                  totalDetailRecords: response.total_detail_records || 0,
+                  planTotalRecords: response.plan_total_records || 0,
+                  progressPercentage: response.progress_percentage || 0,
+                  aiCurrentCount: response.ai_current_count || 0,
+                  aiTotalRecords: response.ai_total_records || 0,
+                  aiProgressPercentage: response.ai_progress_percentage || 0
+                })
+                setTimeout(pollStatus, 7000)
+              }
+            } catch (error) {
+              console.error('[Results] Error polling status:', error)
+              setIsGenerating(false)
+            }
+          }
+          
+          setTimeout(pollStatus, 2000)
+        } catch (error) {
+          console.error('[Results] Error restarting analysis:', error)
+          alert('Failed to restart analysis. Please try again.')
+        }
+      })()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldRestart, analysisId, isLoadingHazards, isGenerating, hasTriggeredRestart])
 
   // Auto-select first report if no analysis_id is present
   useEffect(() => {
