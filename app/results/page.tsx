@@ -653,7 +653,8 @@ function ResultsContent() {
                     rows.push(
                       <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
                         {isFirstHazardRow && (
-                          <td className={styles.td} rowSpan={hazard.hazard_rowspan}>
+                          <td className={`${styles.td} ${styles.tdHazard}`} 
+                            rowSpan={hazard.hazard_rowspan}>
                             {hazard.hazard}
                           </td>
                         )}
@@ -662,7 +663,7 @@ function ResultsContent() {
                             {harmItem.potential_harm}
                           </td>
                         )}
-                        <td className={styles.td}>
+                        <td className={`${styles.td}`}>
                           <span className={`${styles.severityBadge} ${severityClass}`}>
                             {severityItem.severity}
                           </span>
