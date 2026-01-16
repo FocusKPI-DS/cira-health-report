@@ -402,7 +402,7 @@ async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
 async function migrateUserData(anonymousUid: string, authenticatedUid: string) {
   try {
     // TODO: Replace with your actual API endpoint
-    const response = await fetch('/api/migrate-user-data', {
+    const response = await fetch('/api/v1/migrate-user-data', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

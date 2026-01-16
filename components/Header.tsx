@@ -29,7 +29,7 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
         <Link href="/" className={styles.logo}>Cira Health</Link>
         <div className={styles.navActions}>
           {shouldShowUserMenu && <UserMenu />}
-          {shouldShowAuthButtons && (
+          {false && shouldShowAuthButtons && (
             <span className={styles.userStatus}>
               {isAnonymous ? '👤 Anonymous User' : `✓ Signed In, Email=${user?.email}`}
               {currentTeamId && ` | team_id: ${currentTeamId}`}

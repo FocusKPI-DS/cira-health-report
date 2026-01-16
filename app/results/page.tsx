@@ -111,8 +111,8 @@ function ResultsContent() {
       try {
         console.log('[Results] Fetching hazard data for analysis_id:', analysisId)
         const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
-        console.log('[Results] Fetched results:', response)
-        console.log('[Results] Results array:', response.results)
+        //console.log('[Results] Fetched results:', response)
+        //console.log('[Results] Results array:', response.results)
         if (response.results && response.results.length > 0) {
           console.log('[Results] First hazard structure:', JSON.stringify(response.results[0], null, 2))
         }
