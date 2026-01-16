@@ -17,12 +17,17 @@
   background: white;
   border: 1px solid rgba(14, 165, 233, 0.2);
   border-radius: 8px;
-  padding: 2.5rem;
+  padding: 0;
   max-width: 500px;
   width: 100%;
+  max-height: 90vh;
+  height: 90vh;
   position: relative;
   box-shadow: 0 20px 60px rgba(14, 165, 233, 0.2);
   animation: slideIn 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @keyframes slideIn {
@@ -52,12 +57,18 @@
   justify-content: center;
   border-radius: 6px;
   transition: all 0.2s ease;
+  z-index: 10;
 }
 
 .closeButton:hover {
   background: rgba(14, 165, 233, 0.1);
   color: #1e293b;
   border-color: rgba(14, 165, 233, 0.3);
+}
+
+.modalHeader {
+  padding: 2.5rem 2.5rem 1.5rem 2.5rem;
+  flex-shrink: 0;
 }
 
 .title {
@@ -72,8 +83,33 @@
 .subtitle {
   font-size: 0.95rem;
   color: #64748b;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
   text-align: center;
+}
+
+.modalContent {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 2.5rem;
+}
+
+.modalContent::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modalContent::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.modalContent::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.modalContent::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .priceSection {
@@ -82,7 +118,8 @@
   border-radius: 6px;
   padding: 1.5rem;
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  margin-top: 1.5rem;
 }
 
 .priceLabel {
@@ -170,9 +207,15 @@
   transform: none;
 }
 
+.modalFooter {
+  padding: 1.5rem 2.5rem 2.5rem 2.5rem;
+  flex-shrink: 0;
+  border-top: 1px solid rgba(14, 165, 233, 0.1);
+}
+
 .footerText {
   text-align: center;
-  margin-top: 1.5rem;
+  margin: 0;
   font-size: 0.875rem;
   color: #64748b;
   display: flex;
@@ -187,9 +230,291 @@
   flex-shrink: 0;
 }
 
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid rgba(14, 165, 233, 0.1);
+}
+
+.tab {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: -2px;
+}
+
+.tab:hover {
+  color: #0ea5e9;
+}
+
+.tabActive {
+  color: #0ea5e9;
+  border-bottom-color: #0ea5e9;
+}
+
+.tabContent {
+  min-height: 0;
+}
+
+/* Payment Initialization State */
+.paymentInitState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+}
+
+.initText {
+  font-size: 0.95rem;
+  color: #64748b;
+  text-align: center;
+  margin: 0;
+}
+
+.initButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 600;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.initButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 40px rgba(16, 185, 129, 0.4);
+}
+
+.initButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.initButton .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Payment Element */
+.paymentElementWrapper {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+/* Transaction History */
+.transactionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.transactionCard {
+  background: #f8fafc;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 6px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+.transactionCard:hover {
+  border-color: rgba(14, 165, 233, 0.4);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
+}
+
+.transactionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.transactionInfo {
+  flex: 1;
+}
+
+.transactionId {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+}
+
+.transactionDate {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.transactionAmount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.amount {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statusSuccess {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.statusFailed {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.statusRefunded {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.statusPending {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.statusCanceled {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+}
+
+.transactionProduct {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0.5rem 0;
+}
+
+.transactionActions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(14, 165, 233, 0.1);
+}
+
+.receiptLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #0ea5e9;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.receiptLink:hover {
+  color: #0284c7;
+  text-decoration: underline;
+}
+
+.receiptLink svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Loading and Error States */
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(14, 165, 233, 0.2);
+  border-top-color: #0ea5e9;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingState p {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.errorMessage {
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.emptyText {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.emptySubtext {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .modal {
     padding: 1.5rem;
+    max-width: 100%;
   }
   
   .title {
@@ -202,6 +527,21 @@
 
   .formRow {
     flex-direction: column;
+  }
+
+  .transactionHeader {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .transactionAmount {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .transactionsList {
+    max-height: 300px;
   }
 }
 

@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         setUser(firebaseUser)
         setIsAnonymous(firebaseUser.isAnonymous)
-        console.log('用户已登录:', firebaseUser.isAnonymous ? '匿名用户' : firebaseUser.email, firebaseUser.uid)
+        console.log('User logged in:', firebaseUser.isAnonymous ? 'Anonymous User' : firebaseUser.email, firebaseUser.uid)
         
         // Sync existing user with backend
         await syncUserToBackend(firebaseUser)
@@ -58,10 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       } else {
         // No user logged in, sign in anonymously
-        console.log('未检测到用户，正在创建匿名账号...')
+        console.log('No user detected, creating anonymous account...')
         try {
           const result = await signInAnonymously(auth)
-          console.log('匿名登录成功:', result.user.uid)
+          console.log('Anonymous login successful:', result.user.uid)
           setUser(result.user)
           setIsAnonymous(true)
           
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setCurrentTeamId(teamId)
           }
         } catch (error: any) {
-          console.error('匿名登录失败:', error.message)
+          console.error('Anonymous login failed:', error.message)
           setUser(null)
           setIsAnonymous(false)
         } finally {
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 如果没有提供displayName，使用邮箱@前面的部分
     const finalDisplayName = displayName || email.split('@')[0]
 
-    console.log('anonUser:', anonUser ? `${anonUser.isAnonymous ? '匿名用户' : '已认证用户'} (${anonUser.uid})` : '无用户')
+    console.log('anonUser:', anonUser ? `${anonUser.isAnonymous ? 'Anonymous User' : 'Authenticated User'} (${anonUser.uid})` : 'No User')
     // 1️⃣ 匿名用户，优先尝试升级
     if (anonUser?.isAnonymous) {
       try {
@@ -145,10 +145,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign in with email and password (for existing users)
   const signInWithEmail = async (email: string, password: string) => {
     const auth = getFirebaseAuth()
+    const currentUser = auth.currentUser
+    
+    // If there's an anonymous user, sign them out first before signing in with email
+    if (currentUser && currentUser.isAnonymous) {
+      console.log('Signing out anonymous user before email sign in...')
+      await auth.signOut()
+    }
+    
     try {
       await signInWithEmailAndPassword(auth, email, password)
     } catch (error: any) {
-      console.error('邮箱登录失败:', error.message)
+      console.error('Email login failed:', error.message)
       throw error
     }
   }
@@ -156,6 +164,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign up with email and password (create new account)
   const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
     const auth = getFirebaseAuth()
+    const currentUser = auth.currentUser
+    
+    // If there's an anonymous user, sign them out first before creating new account
+    if (currentUser && currentUser.isAnonymous) {
+      console.log('Signing out anonymous user before email sign up...')
+      await auth.signOut()
+    }
+    
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password)
       // 如果没有提供displayName，使用邮箱@前面的部分
@@ -164,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await updateProfile(result.user, { displayName: finalDisplayName })
       }
     } catch (error: any) {
-      console.error('邮箱注册失败:', error.message)
+      console.error('Email sign up failed:', error.message)
       throw error
     }
   }
@@ -175,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentUser = auth.currentUser
 
     if (!currentUser || !currentUser.isAnonymous) {
-      throw new Error('当前用户不是匿名账号')
+      throw new Error('Current user is not an anonymous account')
     }
 
     try {
@@ -184,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Link the credential to the anonymous account
       const result = await linkWithCredential(currentUser, credential)
-      console.log('账号绑定成功:', result.user.email)
+      console.log('Account linked successfully:', result.user.email)
 
       // Update display name if provided
       if (displayName && result.user) {
@@ -201,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return result.user
     } catch (error: any) {
-      console.error('账号绑定失败:', error.message)
+      console.error('Account linking failed:', error.message)
       throw error
     }
   }
@@ -213,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await auth.signOut()
       // After signing out, the onAuthStateChanged listener will automatically sign in anonymously
     } catch (error: any) {
-      console.error('登出失败:', error.message)
+      console.error('Logout failed:', error.message)
       throw error
     }
   }
@@ -398,13 +414,13 @@ async function migrateUserData(anonymousUid: string, authenticatedUid: string) {
     })
 
     if (!response.ok) {
-      throw new Error('数据迁移失败')
+      throw new Error('Data migration failed')
     }
 
     const data = await response.json()
-    console.log('数据迁移成功:', data)
+    console.log('Data migration successful:', data)
   } catch (error: any) {
-    console.error('数据迁移API调用失败:', error.message)
+    console.error('Data migration API call failed:', error.message)
     // Note: We don't throw here to prevent blocking the account linking
     // The migration can be retried or handled separately
   }

@@ -32,23 +32,23 @@ export default function LoginPage() {
       // Redirect to reports page after successful login
       router.push('/reports')
     } catch (err: any) {
-      console.error('认证错误:', err)
+      console.error('Authentication error:', err)
       
       // Handle specific Firebase error codes
       if (err.code === 'auth/email-already-in-use') {
-        setError('该邮箱已被使用，请尝试登录')
+        setError('This email is already in use, please try signing in')
       } else if (err.code === 'auth/weak-password') {
-        setError('密码强度不够，请使用至少6个字符')
+        setError('Password is too weak, please use at least 6 characters')
       } else if (err.code === 'auth/invalid-email') {
-        setError('邮箱格式不正确')
+        setError('Invalid email format')
       } else if (err.code === 'auth/user-not-found') {
-        setError('账号不存在，请先注册')
+        setError('Account not found, please sign up first')
       } else if (err.code === 'auth/wrong-password') {
-        setError('密码错误，请重试')
+        setError('Wrong Password, please try again')
       } else if (err.code === 'auth/invalid-credential') {
-        setError('邮箱或密码错误')
+        setError('Invalid Email or Password, please try again')
       } else {
-        setError(err.message || '操作失败，请重试')
+        setError(err.message || 'Operation failed, please try again')
       }
     } finally {
       setLoading(false)
@@ -132,7 +132,7 @@ export default function LoginPage() {
             disabled={loading}
           >
             {loading 
-              ? '处理中...' 
+              ? 'Loading...' 
               : (isSignUp ? 'Sign Up' : 'Sign In')}
           </button>
         </form>

@@ -31,7 +31,7 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
           {shouldShowUserMenu && <UserMenu />}
           {shouldShowAuthButtons && (
             <span className={styles.userStatus}>
-              {isAnonymous ? '👤 匿名用户' : `✓ 已登录,Email=${user?.email}`}
+              {isAnonymous ? '👤 Anonymous User' : `✓ Signed In, Email=${user?.email}`}
               {currentTeamId && ` | team_id: ${currentTeamId}`}
             </span>
           )}

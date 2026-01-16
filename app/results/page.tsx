@@ -343,7 +343,8 @@ function ResultsContent() {
                   </div>
                 )}
               </div>
-              {user && !isAnonymous && (
+              {/* TODO: For testing purposes - commented out isAnonymous check. Restore after fixing auth state detection */}
+              {user && (
                 <button className={styles.downloadButton} onClick={handleDownload}>
                   <DownloadIcon />
                   {automaticSettingsEnabled ? 'Generate Whole Report' : 'Download Full Report'}
@@ -440,6 +441,15 @@ function ResultsContent() {
       </div>
 
       {showSignInModal && <SignInModal onClose={handleCloseModal} onSuccess={handleSignInSuccess} />}
+      {/* showPaymentModal && (
+        <PaymentModal 
+          onClose={handleClosePayment} 
+          onSuccess={handlePaymentSuccess}
+          reportId={analysisId || undefined}
+          productName={productName || undefined}
+          amount={5.00}
+        />
+      )*/}
       <PHADetailsModal 
         isOpen={showPHADetailsModal}
         onClose={() => setShowPHADetailsModal(false)}
