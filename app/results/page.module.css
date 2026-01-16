@@ -10,18 +10,24 @@
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 1rem;
-  display: flex;
-  gap: 1.5rem;
-  align-items: flex-start;
+  padding-left: calc(380px + 2.5rem);
+  display: block;
+  position: relative;
+  transition: padding-left 0.3s ease;
+}
+
+.pageContentCollapsed {
+  padding-left: calc(60px + 2.5rem);
 }
 
 .sidebarWrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  position: fixed;
+  left: max(2rem, calc((100vw - 1400px) / 2));
+  top: 7rem;
   width: 380px;
-  flex-shrink: 0;
-  transition: width 0.3s ease;
+  max-height: calc(100vh - 9rem);
+  z-index: 10;
+  transition: width 0.3s ease, left 0.3s ease;
 }
 
 .sidebarWrapperCollapsed {
@@ -132,12 +138,9 @@
   border: 1px solid rgba(14, 165, 233, 0.1);
   border-radius: 8px;
   padding: 1.5rem;
-  position: sticky;
-  top: 6rem;
-  max-height: calc(100vh - 8rem);
+  max-height: calc(100vh - 9rem);
   overflow-y: auto;
   transition: width 0.3s ease;
-  align-self: flex-start;
 }
 
 .sidebarCollapsed {
@@ -314,7 +317,8 @@
 }
 
 .container {
-  flex: 1;
+  width: 100%;
+  max-width: 100%;
   background: white;
   border: 1px solid rgba(14, 165, 233, 0.2);
   border-radius: 8px;
@@ -371,8 +375,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
   border-bottom: 1px solid rgba(14, 165, 233, 0.2);
   gap: 2rem;
 }

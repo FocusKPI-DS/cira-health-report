@@ -488,7 +488,7 @@ function ResultsContent() {
   return (
     <main className={styles.main}>
       <Header showAuthButtons={!user || isAnonymous} showUserMenu={!!(user && !isAnonymous)} />
-      <div className={styles.pageContent}>
+      <div className={`${styles.pageContent} ${!isSidebarExpanded ? styles.pageContentCollapsed : ''}`}>
         <div className={`${styles.sidebarWrapper} ${!isSidebarExpanded ? styles.sidebarWrapperCollapsed : ''}`}>
           <div className={`${styles.sidebar} ${!isSidebarExpanded ? styles.sidebarCollapsed : ''}`}>
             <div className={styles.sidebarHeader}>
@@ -558,49 +558,7 @@ function ResultsContent() {
         ) : (
           <>
             <div className={styles.header}>
-              <div className={styles.headerLeft}>
-                <h1 className={styles.title}>First PHA Analysis Draft</h1>
-                {progressData && (
-                  <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: '500' }}>Detail Records Progress</span>
-                        <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.progressPercentage.toFixed(1)}%</span>
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
-                        {progressData.totalDetailRecords} / more than {progressData.planTotalRecords} records
-                      </div>
-                      <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', backgroundColor: '#4CAF50', transition: 'width 0.3s ease' }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: '500' }}>AI Processing Progress</span>
-                        <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
-                        {progressData.aiCurrentCount} / Max {progressData.aiTotalRecords} records
-                      </div>
-                      <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', backgroundColor: '#2196F3', transition: 'width 0.3s ease' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {productName && (
-                  <div className={styles.productInfo}>
-                    <p className={styles.productName}>
-                      Product: <strong>{productName}</strong>
-                    </p>
-                    {intendedUse && (
-                      <p className={styles.productDescription}>
-                        {intendedUse}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <h1 className={styles.title}>First PHA Analysis Draft</h1>
               {user && automaticSettingsEnabled && (
                 <button className={styles.downloadButton} onClick={handleGenerateWholeReport}>
                   <DownloadIcon />
@@ -614,6 +572,48 @@ function ResultsContent() {
                 </button>
               )}
             </div>
+            
+            {progressData && (
+              <div style={{ marginTop: '8px', padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px', display: 'flex', gap: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '500' }}>Detail Records Progress</span>
+                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.progressPercentage.toFixed(1)}%</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                    {progressData.totalDetailRecords} / around {progressData.planTotalRecords} records
+                  </div>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', backgroundColor: '#4CAF50', transition: 'width 0.3s ease' }}></div>
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '500' }}>AI Processing Progress</span>
+                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                    {progressData.aiCurrentCount} / Max {progressData.aiTotalRecords} records
+                  </div>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', backgroundColor: '#2196F3', transition: 'width 0.3s ease' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {productName && (
+              <div className={styles.productInfo}>
+                <p className={styles.productName}>
+                  Product: <strong>{productName}</strong>
+                </p>
+                {intendedUse && (
+                  <p className={styles.productDescription}>
+                    {intendedUse}
+                  </p>
+                )}
+              </div>
+            )}
 
             {isLoadingHazards ? (
               <div className={styles.generatingState}>
