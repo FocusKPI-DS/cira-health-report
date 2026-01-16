@@ -48,7 +48,7 @@ export default function Home() {
               required
             />
             <button type="submit" className={styles.ctaButton}>
-              See a quick free result in 5 seconds
+              See a quick free result in 30 seconds
               <span className={styles.arrow}>→</span>
             </button>
           </form>

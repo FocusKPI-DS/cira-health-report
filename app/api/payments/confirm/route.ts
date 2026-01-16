@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(paymentIntent.created * 1000).toISOString(),
       receiptUrl: receiptUrl,
       reportId: paymentIntent.metadata?.report_id || undefined,
+      analysisId: paymentIntent.metadata?.analysis_id || undefined,
       productName: paymentIntent.metadata?.product_name || undefined,
       description: paymentIntent.description || undefined,
     }

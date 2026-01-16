@@ -43,8 +43,9 @@ async function getValidToken(maxRetries: number = 3): Promise<string | null> {
         return null
       }
       
-      // Get Firebase ID token (automatically refreshes if needed)
-      const token = await user.getIdToken(true) // Force refresh to ensure valid token
+      // Get Firebase ID token (automatically refreshes only if expired or within 5 minutes of expiring)
+      // Set force refresh to false to use cached token when valid
+      const token = await user.getIdToken(false)
       if (token) {
         return token
       }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, JSX } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
@@ -8,6 +8,7 @@ import SignInModal from '@/components/SignInModal'
 import PHADetailsModal from '@/components/PHADetailsModal'
 import GenerateWorkflowModal from '@/components/GenerateWorkflowModal'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
+import PaymentModal from '@/components/PaymentModal'
 import { InfoIcon, DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { analysisApi } from '@/lib/analysis-api'
@@ -50,6 +51,7 @@ function ResultsContent() {
   const [intendedUse, setIntendedUse] = useState('')
   const [showSignInModal, setShowSignInModal] = useState(false)
   const [showPHADetailsModal, setShowPHADetailsModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedHazard, setSelectedHazard] = useState<string>('')
   const [selectedPotentialHarm, setSelectedPotentialHarm] = useState<string>('')
   const [selectedSeverity, setSelectedSeverity] = useState<string>('')
@@ -63,6 +65,14 @@ function ResultsContent() {
   const [isLoadingHazards, setIsLoadingHazards] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
+  const [progressData, setProgressData] = useState<{
+    totalDetailRecords: number
+    planTotalRecords: number
+    progressPercentage: number
+    aiCurrentCount: number
+    aiTotalRecords: number
+    aiProgressPercentage: number
+  } | null>(null)
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -118,6 +128,20 @@ function ResultsContent() {
         }
         setCurrentHazards(response.results || [])
         
+        // Update progress data if status is Generating
+        if (response.status === 'Generating') {
+          setProgressData({
+            totalDetailRecords: response.total_detail_records || 0,
+            planTotalRecords: response.plan_total_records || 0,
+            progressPercentage: response.progress_percentage || 0,
+            aiCurrentCount: response.ai_current_count || 0,
+            aiTotalRecords: response.ai_total_records || 0,
+            aiProgressPercentage: response.ai_progress_percentage || 0
+          })
+        } else {
+          setProgressData(null)
+        }
+        
         // Fetch filter settings to check automatic_settings_enabled
         try {
           const filters = await analysisApi.getAnalysisFilters(analysisId)
@@ -170,6 +194,21 @@ function ResultsContent() {
     fetchReportListData()
   }, [user, authLoading])
 
+  // Auto-select first report if no analysis_id is present
+  useEffect(() => {
+    // Only proceed if reports are loaded and not currently loading
+    if (isLoadingReports || report_list.length === 0) return
+    
+    // Check if there's no analysis_id in URL
+    if (!analysisId && report_list.length > 0) {
+      const firstReport = report_list[0]
+      console.log('[Results] No analysis_id found, auto-selecting first report:', firstReport)
+      
+      // Navigate to the first report
+      router.push(`/results?analysis_id=${encodeURIComponent(firstReport.id)}&productName=${encodeURIComponent(firstReport.productName)}&intendedUse=${encodeURIComponent(firstReport.intendedUse)}`)
+    }
+  }, [report_list, isLoadingReports, analysisId, router])
+
   const handleViewReport = (report: Report) => {
     router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
   }
@@ -190,21 +229,111 @@ function ResultsContent() {
     // User state will be updated by AuthProvider
   }
 
-  const handleDownload = () => {
-    // If user is anonymous, show sign-in modal
-    if (!user || isAnonymous) {
-      setShowSignInModal(true)
+  const handleClosePayment = () => {
+    setShowPaymentModal(false)
+  }
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false)
+    // After payment, check and download
+    await checkPaymentAndDownload()
+  }
+
+  const checkPaymentAndDownload = async () => {
+    if (!analysisId) {
+      alert('No analysis ID available')
+      return false
+    }
+
+    try {
+      console.log('[Results] Checking payment status for analysis:', analysisId)
+      
+      // Check if this analysis has been paid for
+      const response = await fetch(`/api/payments/transactions?analysisId=${encodeURIComponent(analysisId)}`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to check payment status')
+      }
+
+      const data = await response.json()
+      const successfulPayments = data.transactions?.filter((t: any) => t.status === 'succeeded') || []
+      
+      console.log('[Results] Found', successfulPayments.length, 'successful payments')
+      
+      if (successfulPayments.length > 0) {
+        // Payment found, proceed with download
+        console.log('[Results] Payment confirmed, starting download...')
+        await performDownload()
+        return true
+      } else {
+        // No payment found
+        console.log('[Results] No payment found for this analysis')
+        return false
+      }
+    } catch (error) {
+      console.error('[Results] Error checking payment:', error)
+      return false
+    }
+  }
+
+  const performDownload = async () => {
+    if (!analysisId) {
       return
     }
 
-    // Real user handling
-    if (automaticSettingsEnabled) {
-      // If automatic settings is enabled, trigger restart full analysis
-      handleRestartFullAnalysis()
-    } else {
-      // If automatic settings is disabled, show download (currently just alert)
-      alert('Download functionality will be implemented here. This would download the full report.')
+    try {
+      console.log('[Results] Exporting analysis:', analysisId)
+      const blob = await analysisApi.exportAnalysis(analysisId, 'excel')
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `pha_analysis_${analysisId}_details.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      console.log('[Results] Export completed')
+    } catch (error) {
+      console.error('[Results] Error exporting analysis:', error)
+      alert('Failed to export report. Please try again.')
     }
+  }
+
+  const handleDownload = async () => {
+    if (!analysisId) {
+      alert('No analysis ID available')
+      return
+    }
+
+    try {
+      // Check analysis status before downloading
+      console.log('[Results] Checking analysis status before download:', analysisId)
+      const statusResponse = await analysisApi.getAnalysisResults(analysisId, 1, 1)
+      
+      if (statusResponse.status === 'Generating') {
+        alert('Please wait for the analysis to complete')
+        return
+      }
+      
+      // Check if payment has been made for this analysis
+      const hasPaid = await checkPaymentAndDownload()
+      
+      if (!hasPaid) {
+        // No payment found, show payment modal
+        console.log('[Results] Payment required, showing payment modal')
+        setShowPaymentModal(true)
+      }
+    } catch (error) {
+      console.error('[Results] Error in download flow:', error)
+      alert('Failed to process download. Please try again.')
+    }
+  }
+
+  const handleGenerateWholeReport = () => {
+    handleRestartFullAnalysis()
   }
 
   const handleRestartFullAnalysis = async () => {
@@ -218,6 +347,15 @@ function ResultsContent() {
       const response = await analysisApi.restartFullAnalysis(analysisId)
       console.log('[Results] Restart response:', response)
       
+      // Immediately fetch updated filter settings to get the new automatic_settings_enabled status
+      try {
+        const filters = await analysisApi.getAnalysisFilters(analysisId)
+        console.log('[Results] Updated filters after restart:', filters)
+        setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
+      } catch (filterError) {
+        console.error('[Results] Error fetching updated filters:', filterError)
+      }
+      
       // Show generating state
       setIsGenerating(true)
       
@@ -227,13 +365,23 @@ function ResultsContent() {
       // Poll for completion
       const pollStatus = async () => {
         try {
-          const status = await analysisApi.checkAnalysisStatus(analysisId)
-          if (status.status !== 'Generating') {
+          const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
+          if (response.status !== 'Generating') {
             setIsGenerating(false)
+            setProgressData(null)
             // Reload the page to show new results
             window.location.reload()
           } else {
-            setTimeout(pollStatus, 5000)
+            // Update progress data during polling
+            setProgressData({
+              totalDetailRecords: response.total_detail_records || 0,
+              planTotalRecords: response.plan_total_records || 0,
+              progressPercentage: response.progress_percentage || 0,
+              aiCurrentCount: response.ai_current_count || 0,
+              aiTotalRecords: response.ai_total_records || 0,
+              aiProgressPercentage: response.ai_progress_percentage || 0
+            })
+            setTimeout(pollStatus, 7000)
           }
         } catch (error) {
           console.error('[Results] Error polling status:', error)
@@ -241,7 +389,7 @@ function ResultsContent() {
         }
       }
       
-      setTimeout(pollStatus, 5000)
+      setTimeout(pollStatus, 2000)
     } catch (error) {
       console.error('[Results] Error restarting analysis:', error)
       alert('Failed to restart analysis. Please try again.')
@@ -330,6 +478,34 @@ function ResultsContent() {
             <div className={styles.header}>
               <div className={styles.headerLeft}>
                 <h1 className={styles.title}>First PHA Analysis Draft</h1>
+                {progressData && (
+                  <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>Detail Records Progress</span>
+                        <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.progressPercentage.toFixed(1)}%</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                        {progressData.totalDetailRecords} / more than {progressData.planTotalRecords} records
+                      </div>
+                      <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', backgroundColor: '#4CAF50', transition: 'width 0.3s ease' }}></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>AI Processing Progress</span>
+                        <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                        {progressData.aiCurrentCount} / Max {progressData.aiTotalRecords} records
+                      </div>
+                      <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', backgroundColor: '#2196F3', transition: 'width 0.3s ease' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {productName && (
                   <div className={styles.productInfo}>
                     <p className={styles.productName}>
@@ -343,11 +519,16 @@ function ResultsContent() {
                   </div>
                 )}
               </div>
-              {/* TODO: For testing purposes - commented out isAnonymous check. Restore after fixing auth state detection */}
-              {user && (
+              {user && automaticSettingsEnabled && (
+                <button className={styles.downloadButton} onClick={handleGenerateWholeReport}>
+                  <DownloadIcon />
+                  Generate Whole Report
+                </button>
+              )}
+              {user && !automaticSettingsEnabled && (
                 <button className={styles.downloadButton} onClick={handleDownload}>
                   <DownloadIcon />
-                  {automaticSettingsEnabled ? 'Generate Whole Report' : 'Download Full Report'}
+                  Download Full Report
                 </button>
               )}
             </div>
@@ -425,6 +606,7 @@ function ResultsContent() {
               })}
             </tbody>
           </table>
+          <button onClick={() => setShowPaymentModal(true)}>Try payment</button>
         </div>
             )}
 
@@ -441,15 +623,16 @@ function ResultsContent() {
       </div>
 
       {showSignInModal && <SignInModal onClose={handleCloseModal} onSuccess={handleSignInSuccess} />}
-      {/* showPaymentModal && (
+      {showPaymentModal && (
         <PaymentModal 
           onClose={handleClosePayment} 
           onSuccess={handlePaymentSuccess}
           reportId={analysisId || undefined}
+          analysisId={analysisId || undefined}
           productName={productName || undefined}
           amount={5.00}
         />
-      )*/}
+      )}
       <PHADetailsModal 
         isOpen={showPHADetailsModal}
         onClose={() => setShowPHADetailsModal(false)}

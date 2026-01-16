@@ -19,6 +19,13 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
     router.push('/login')
   }
 
+  const handleGoToEnterprise = () => {
+    const enterpriseUrl = process.env.NEXT_PUBLIC_CIRA_FRONTEND_URL
+    if (enterpriseUrl) {
+      window.location.href = enterpriseUrl
+    }
+  }
+
   // Determine what to show based on auth state and props
   const shouldShowUserMenu = showUserMenu && user && !isAnonymous && !loading
   const shouldShowAuthButtons = showAuthButtons && (!user || isAnonymous) && !loading
@@ -26,7 +33,9 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
   return (
     <div className={styles.navbar}>
       <div className={styles.navContainer}>
-        <Link href="/" className={styles.logo}>Cira Health</Link>
+        <Link href="/" className={styles.logo}>
+          <img src="/images/cira-logo.png" alt="Cira Health" style={{ height: '48px' }} />
+        </Link>
         <div className={styles.navActions}>
           {shouldShowUserMenu && <UserMenu />}
           {false && shouldShowAuthButtons && (
@@ -36,7 +45,7 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
             </span>
           )}
           {/* These buttons always show, regardless of auth state */}
-          <button className={styles.enterpriseButton} onClick={() => {}}>
+          <button className={styles.enterpriseButton} onClick={handleGoToEnterprise}>
             Go to Enterprise Version
           </button>
           {!shouldShowUserMenu && 

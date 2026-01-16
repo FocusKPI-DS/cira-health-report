@@ -339,8 +339,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setCurrentStep('generating')
     addMessage('ai', 'Generating your PHA Analysis report... This may take a few moments.', 'generating')
 
-    // Start 5-minute countdown (300 seconds)
-    setCountdown(300)
+    // Start 0.5-minute countdown (30 seconds)
+    setCountdown(30)
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current)
     }

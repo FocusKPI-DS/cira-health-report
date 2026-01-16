@@ -15,6 +15,7 @@ interface PaymentModalProps {
   onClose: () => void
   onSuccess: () => void
   reportId?: string
+  analysisId?: string
   productName?: string
   amount?: number
 }
@@ -146,6 +147,7 @@ function PaymentForm({
   onSuccess, 
   onClose, 
   reportId, 
+  analysisId,
   productName, 
   amount = 5.00,
   onProcessingChange
@@ -153,6 +155,7 @@ function PaymentForm({
   onSuccess: () => void
   onClose: () => void
   reportId?: string
+  analysisId?: string
   productName?: string
   amount?: number
   onProcessingChange?: (isProcessing: boolean) => void
@@ -164,20 +167,28 @@ function PaymentForm({
 
   // Create payment intent only when user is ready to pay
   const handleInitializePayment = async () => {
+    console.log('[PaymentForm] handleInitializePayment called')
+    console.log('[PaymentForm] user:', user?.uid)
+    console.log('[PaymentForm] clientSecret exists:', !!clientSecret)
+    
     if (!user) {
+      console.error('[PaymentForm] No user found')
       setError('Please log in to make a payment')
       return
     }
 
     if (clientSecret) {
       // Already initialized
+      console.log('[PaymentForm] Payment already initialized')
       return
     }
 
     setIsInitializing(true)
     setError(null)
+    console.log('[PaymentForm] Starting payment initialization...')
 
     try {
+      console.log('[PaymentForm] Sending request to /api/payments/create-intent')
       const response = await fetch('/api/payments/create-intent', {
         method: 'POST',
         headers: {
@@ -187,28 +198,39 @@ function PaymentForm({
           amount: amount,
           currency: 'usd',
           reportId: reportId,
+          analysisId: reportId,
           userId: user.uid,
           productName: productName,
         }),
       })
 
+      console.log('[PaymentForm] Response status:', response.status)
+      console.log('[PaymentForm] Response ok:', response.ok)
+
       if (!response.ok) {
         const errorData = await response.json()
+        console.error('[PaymentForm] Error response:', errorData)
         throw new Error(errorData.error || 'Failed to create payment intent')
       }
 
       const data = await response.json()
+      console.log('[PaymentForm] Received data:', data)
+      console.log('[PaymentForm] Client secret:', data.clientSecret ? 'present' : 'missing')
+      
       setClientSecret(data.clientSecret)
+      console.log('[PaymentForm] Client secret set successfully')
     } catch (err: any) {
+      console.error('[PaymentForm] Error caught:', err)
       setError(err.message || 'Failed to initialize payment')
-      console.error('[Payment] Error creating intent:', err)
     } finally {
       setIsInitializing(false)
+      console.log('[PaymentForm] Initialization complete')
     }
   }
 
   // Show initial state - user needs to click to proceed
   if (!clientSecret) {
+    console.log('[PaymentForm] Rendering init state, clientSecret:', clientSecret)
     return (
       <div className={styles.paymentInitState}>
         <p className={styles.initText}>
@@ -238,6 +260,7 @@ function PaymentForm({
     )
   }
 
+  console.log('[PaymentForm] Rendering payment element with clientSecret')
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
       <PaymentFormInner
@@ -395,7 +418,8 @@ function TransactionHistory({ userId }: { userId: string }) {
 export default function PaymentModal({ 
   onClose, 
   onSuccess, 
-  reportId, 
+  reportId,
+  analysisId, 
   productName, 
   amount = 5.00 
 }: PaymentModalProps) {
@@ -468,6 +492,7 @@ export default function PaymentModal({
                 onSuccess={onSuccess}
                 onClose={onClose}
                 reportId={reportId}
+                analysisId={analysisId}
                 productName={productName}
                 amount={amount}
               />

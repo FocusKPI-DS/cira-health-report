@@ -26,10 +26,15 @@ function GenerateContent() {
   })
 
   const handleViewReport = async () => {
+    console.log('[Generate] handleViewReport called, analysisId:', workflow.analysisId)
+    console.log('[Generate] reportData length:', reportData.length)
+    
     // Fetch report data if not already loaded
-    if (reportData.length === 0 && workflow.analysisId) {
+    if (workflow.analysisId) {
       try {
+        console.log('[Generate] Fetching report data from API...')
         const hazards = await workflow.fetchReportData()
+        console.log('[Generate] Fetched hazards:', hazards.length)
         setReportData(hazards)
         setShowReportModal(true)
       } catch (error) {
@@ -37,6 +42,7 @@ function GenerateContent() {
         alert(error instanceof Error ? error.message : 'Failed to load report data')
       }
     } else {
+      console.log('[Generate] No analysisId, showing modal with existing reportData')
       setShowReportModal(true)
     }
   }

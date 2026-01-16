@@ -8,6 +8,7 @@ interface CreateIntentRequest {
   amount: number
   currency?: string
   reportId?: string
+  analysisId?: string
   userId: string
   productName?: string
 }
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateIntentRequest = await request.json()
-    const { amount, currency = 'usd', reportId, userId, productName } = body
+    const { amount, currency = 'usd', reportId, analysisId, userId, productName } = body
 
     // Validate required fields
     if (!amount || amount <= 0) {
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         firebase_uid: userId,
         report_id: reportId || '',
+        analysis_id: analysisId || '',
         product_name: productName || '',
       },
       description: productName 

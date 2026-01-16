@@ -26,7 +26,6 @@ interface AuthContextType {
   smartLogin: (email: string, password: string, displayName?: string) => Promise<SmartLoginResult>
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>
-  linkAnonymousAccount: (email: string, password: string, displayName?: string) => Promise<User>
   logout: () => Promise<void>
 }
 
@@ -130,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 3️⃣ 有匿名账号才需要合并
     if (anonUser && anonUser.uid !== realUser.uid) {
       console.log('检测到匿名账号，开始合并数据...')
-      await migrateUserData(anonUser.uid, realUser.uid)
+      await migrateUserData(realUser, anonUser.uid)
       console.log('✅ 数据合并完成，匿名账号将自动失效')
       // 注意：不需要手动删除匿名账号，因为：
       // 1. 登录后匿名账号的认证上下文已失效，无法删除（会报 admin-restricted-operation 错误）
@@ -185,43 +184,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Link anonymous account to email/password
-  const linkAnonymousAccount = async (email: string, password: string, displayName?: string) => {
-    const auth = getFirebaseAuth()
-    const currentUser = auth.currentUser
-
-    if (!currentUser || !currentUser.isAnonymous) {
-      throw new Error('Current user is not an anonymous account')
-    }
-
-    try {
-      // Create credential
-      const credential = EmailAuthProvider.credential(email, password)
-      
-      // Link the credential to the anonymous account
-      const result = await linkWithCredential(currentUser, credential)
-      console.log('Account linked successfully:', result.user.email)
-
-      // Update display name if provided
-      if (displayName && result.user) {
-        await updateProfile(result.user, { displayName })
-      }
-
-      // Call backend API to migrate data
-      // This would be implemented based on your backend API
-      await migrateUserData(currentUser.uid, result.user.uid)
-      
-      // 手动更新状态，因为 linkWithCredential 不会触发 onAuthStateChanged
-      setUser(result.user)
-      setIsAnonymous(false)
-      
-      return result.user
-    } catch (error: any) {
-      console.error('Account linking failed:', error.message)
-      throw error
-    }
-  }
-
   // Logout
   const logout = async () => {
     const auth = getFirebaseAuth()
@@ -244,7 +206,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         smartLogin,
         signInWithEmail,
         signUpWithEmail,
-        linkAnonymousAccount,
         logout,
       }}
     >
@@ -399,17 +360,17 @@ async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
   
 
 // Helper function to call backend API for data migration
-async function migrateUserData(anonymousUid: string, authenticatedUid: string) {
+async function migrateUserData(firebaseUser: User, anonymousUid: string) {
   try {
-    // TODO: Replace with your actual API endpoint
-    const response = await fetch('/api/v1/migrate-user-data', {
+    const idToken = await waitForFirebaseToken(firebaseUser)
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/anonclient/migrate-user-data`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
       },
       body: JSON.stringify({
-        anonymousUid,
-        authenticatedUid,
+        "anonymous_uid": anonymousUid,
       }),
     })
 

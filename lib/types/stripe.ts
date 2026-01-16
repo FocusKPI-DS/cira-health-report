@@ -11,6 +11,7 @@ export interface Transaction {
   createdAt: string // ISO date string
   receiptUrl: string | null // Stripe hosted receipt URL
   reportId?: string
+  analysisId?: string
   productName?: string
   description?: string
 }

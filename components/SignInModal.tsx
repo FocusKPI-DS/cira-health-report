@@ -101,7 +101,7 @@ export default function SignInModal({ onClose, onSuccess }: SignInModalProps) {
           </div>
 
           <button type="submit" className={styles.signInButton} disabled={loading}>
-            {loading ? '登录中...' : 'Sign In'}
+            {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
 

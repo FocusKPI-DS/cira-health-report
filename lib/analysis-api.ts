@@ -24,6 +24,13 @@ export interface AnalysisResultResponse {
   total_count: number
   page: number
   page_size: number
+  status?: 'Generating' | 'Completed' | 'Failed'
+  total_detail_records?: number
+  plan_total_records?: number
+  progress_percentage?: number
+  ai_current_count?: number
+  ai_total_records?: number
+  ai_progress_percentage?: number
 }
 
 export interface HazardData {
@@ -350,5 +357,29 @@ export const analysisApi = {
     }
     
     return response.json()
+  },
+
+  /**
+   * Export PHA analysis to downloadable file
+   * @param analysisId The analysis ID to export
+   * @param format Export format (csv, excel, or pdf)
+   * @returns Blob of the exported file
+   */
+  async exportAnalysis(analysisId: string, format: 'csv' | 'excel' | 'pdf' = 'excel'): Promise<Blob> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/export?format=${format}`,
+      {
+        method: 'GET',
+        headers,
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to export analysis' }))
+      throw new Error(error.detail || 'Failed to export analysis')
+    }
+    
+    return response.blob()
   }
 }

@@ -6,101 +6,83 @@ import Link from 'next/link'
 import styles from './page.module.css'
 import Header from '@/components/Header'
 import { DownloadIcon } from '@/components/Icons'
-
-interface Invoice {
-  id: string
-  invoiceNumber: string
-  date: string
-  amount: number
-  status: 'paid' | 'pending' | 'overdue'
-  description: string
-  reportId?: string
-  reportName?: string
-}
+import { useAuth } from '@/lib/auth'
+import { Transaction } from '@/lib/types/stripe'
 
 export default function InvoicesPage() {
   const router = useRouter()
-  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const { user } = useAuth()
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate API call
-    const loadInvoices = async () => {
-      setLoading(true)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Mock invoice data
-      setInvoices([
-        {
-          id: '1',
-          invoiceNumber: 'INV-2024-001',
-          date: '2024-01-15',
-          amount: 4.99,
-          status: 'paid',
-          description: 'Full Report Download - Syringe',
-          reportId: '1',
-          reportName: 'Syringe'
-        },
-        {
-          id: '2',
-          invoiceNumber: 'INV-2024-002',
-          date: '2024-01-10',
-          amount: 4.99,
-          status: 'paid',
-          description: 'Full Report Download - Blood Pressure Monitor',
-          reportId: '2',
-          reportName: 'Blood Pressure Monitor'
-        },
-        {
-          id: '3',
-          invoiceNumber: 'INV-2024-003',
-          date: '2024-01-05',
-          amount: 4.99,
-          status: 'pending',
-          description: 'Full Report Download - Pacemaker',
-          reportId: '3',
-          reportName: 'Pacemaker'
+    const fetchTransactions = async () => {
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const response = await fetch(`/api/payments/transactions?userId=${encodeURIComponent(user.uid)}`)
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch transactions')
         }
-      ])
-      
-      setLoading(false)
+
+        const data = await response.json()
+        setTransactions(data.transactions || [])
+      } catch (err: any) {
+        setError(err.message || 'Failed to load transactions')
+        console.error('[Invoices] Error:', err)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    loadInvoices()
-  }, [])
+    fetchTransactions()
+  }, [user])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', { 
       year: 'numeric', 
       month: 'long', 
-      day: 'numeric' 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     })
   }
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency: string = 'usd') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: currency.toUpperCase(),
     }).format(amount)
   }
 
-  const getStatusClass = (status: string) => {
+  const getStatusClass = (status: Transaction['status']) => {
     switch (status) {
-      case 'paid':
+      case 'succeeded':
         return styles.statusPaid
+      case 'failed':
+        return styles.statusOverdue
+      case 'refunded':
+        return styles.statusRefunded
       case 'pending':
         return styles.statusPending
-      case 'overdue':
-        return styles.statusOverdue
+      case 'canceled':
+        return styles.statusCanceled
       default:
         return ''
     }
   }
 
-  const handleDownloadInvoice = (invoiceId: string) => {
-    // In production, this would download the actual invoice PDF
-    alert(`Downloading invoice ${invoiceId}...`)
+  const getStatusLabel = (status: Transaction['status']) => {
+    return status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   return (
@@ -116,51 +98,67 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {loading ? (
+        {!user ? (
+          <div className={styles.emptyState}>
+            <p className={styles.emptyText}>Please log in to view invoices</p>
+          </div>
+        ) : loading ? (
           <div className={styles.loadingState}>
             <div className={styles.spinner}></div>
-            <p>Loading invoices...</p>
+            <p>Loading transactions...</p>
           </div>
-        ) : invoices.length === 0 ? (
+        ) : error ? (
+          <div className={styles.errorMessage}>
+            {error}
+          </div>
+        ) : transactions.length === 0 ? (
           <div className={styles.emptyState}>
-            <p className={styles.emptyText}>No invoices yet</p>
+            <p className={styles.emptyText}>No transactions yet</p>
             <p className={styles.emptySubtext}>
-              Invoices will appear here after you download reports
+              Your payment history will appear here after you make purchases
             </p>
           </div>
         ) : (
           <div className={styles.invoicesList}>
-            {invoices.map((invoice) => (
-              <div key={invoice.id} className={styles.invoiceCard}>
+            {transactions.map((transaction) => (
+              <div key={transaction.id} className={styles.invoiceCard}>
                 <div className={styles.invoiceHeader}>
                   <div className={styles.invoiceInfo}>
-                    <h3 className={styles.invoiceNumber}>{invoice.invoiceNumber}</h3>
-                    <p className={styles.invoiceDate}>{formatDate(invoice.date)}</p>
+                    <h3 className={styles.invoiceNumber}>
+                      {transaction.description || `Payment ${transaction.id.slice(-8)}`}
+                    </h3>
+                    <p className={styles.invoiceDate}>{formatDate(transaction.createdAt)}</p>
                   </div>
                   <div className={styles.invoiceAmount}>
-                    <span className={styles.amount}>{formatCurrency(invoice.amount)}</span>
-                    <span className={`${styles.status} ${getStatusClass(invoice.status)}`}>
-                      {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                    <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
+                    <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
+                      {getStatusLabel(transaction.status)}
                     </span>
                   </div>
                 </div>
                 <div className={styles.invoiceBody}>
-                  <p className={styles.invoiceDescription}>{invoice.description}</p>
-                  {invoice.reportName && (
+                  {transaction.productName && (
                     <p className={styles.invoiceReport}>
-                      Report: <strong>{invoice.reportName}</strong>
+                      Report: <strong>{transaction.productName}</strong>
                     </p>
                   )}
+                  <p className={styles.invoiceDescription}>
+                    Payment ID: {transaction.paymentIntentId}
+                  </p>
                 </div>
-                <div className={styles.invoiceActions}>
-                  <button 
-                    className={styles.downloadButton}
-                    onClick={() => handleDownloadInvoice(invoice.id)}
-                  >
-                    <DownloadIcon />
-                    Download Invoice
-                  </button>
-                </div>
+                {transaction.status === 'succeeded' && transaction.receiptUrl && (
+                  <div className={styles.invoiceActions}>
+                    <a 
+                      href={transaction.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.downloadButton}
+                    >
+                      <DownloadIcon />
+                      View Receipt
+                    </a>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -173,18 +171,18 @@ export default function InvoicesPage() {
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>Total Paid</span>
                 <span className={styles.statValue}>
-                  {formatCurrency(invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.amount, 0))}
+                  {formatCurrency(transactions.filter(t => t.status === 'succeeded').reduce((sum, t) => sum + t.amount, 0))}
                 </span>
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>Pending</span>
                 <span className={styles.statValue}>
-                  {formatCurrency(invoices.filter(i => i.status === 'pending').reduce((sum, i) => sum + i.amount, 0))}
+                  {formatCurrency(transactions.filter(t => t.status === 'pending').reduce((sum, t) => sum + t.amount, 0))}
                 </span>
               </div>
               <div className={styles.statItem}>
-                <span className={styles.statLabel}>Total Invoices</span>
-                <span className={styles.statValue}>{invoices.length}</span>
+                <span className={styles.statLabel}>Total Transactions</span>
+                <span className={styles.statValue}>{transactions.length}</span>
               </div>
             </div>
           </div>
