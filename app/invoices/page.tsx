@@ -8,6 +8,7 @@ import Header from '@/components/Header'
 import { DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { Transaction } from '@/lib/types/stripe'
+import ReceiptModal from '@/components/ReceiptModal'
 
 export default function InvoicesPage() {
   const router = useRouter()
@@ -15,6 +16,8 @@ export default function InvoicesPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -146,17 +149,18 @@ export default function InvoicesPage() {
                     Payment ID: {transaction.paymentIntentId}
                   </p>
                 </div>
-                {transaction.status === 'succeeded' && transaction.receiptUrl && (
+                {transaction.status === 'succeeded' && (
                   <div className={styles.invoiceActions}>
-                    <a 
-                      href={transaction.receiptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => {
+                        setSelectedTransaction(transaction)
+                        setShowReceiptModal(true)
+                      }}
                       className={styles.downloadButton}
                     >
                       <DownloadIcon />
                       View Receipt
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
@@ -188,6 +192,18 @@ export default function InvoicesPage() {
           </div>
         </div>
       </div>
+
+      {showReceiptModal && selectedTransaction && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => {
+            setShowReceiptModal(false)
+            setSelectedTransaction(null)
+          }}
+          transaction={selectedTransaction}
+          purpose="download"
+        />
+      )}
     </main>
   )
 }
