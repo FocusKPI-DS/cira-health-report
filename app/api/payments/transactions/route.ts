@@ -108,14 +108,10 @@ export async function GET(request: NextRequest) {
             payment_intent: pi.id,
             limit: 1,
           })
-          receiptUrl = charges.data[0]?.receipt_url || null
-          // Extract receipt number from receipt URL
-          if (receiptUrl) {
-            const receiptMatch = receiptUrl.match(/receipts\/([^\/]+)/)
-            if (receiptMatch && receiptMatch[1]) {
-              receiptNumber = receiptMatch[1]
-            }
-          }
+          const charge = charges.data[0]
+          receiptUrl = charge?.receipt_url || null
+          // Use Stripe's receipt_number field (format: "1246-6135")
+          receiptNumber = charge?.receipt_number || undefined
         } catch (error) {
           console.error('[Fetch Transactions] Error fetching charge:', error)
         }
@@ -215,15 +211,8 @@ export async function GET(request: NextRequest) {
       .map((pi) => {
         const charge = chargeMap.get(pi.id)
         const receiptUrl = charge?.receipt_url || null
-        
-        // Extract receipt number from receipt URL
-        let receiptNumber: string | undefined
-        if (receiptUrl) {
-          const receiptMatch = receiptUrl.match(/receipts\/([^\/]+)/)
-          if (receiptMatch && receiptMatch[1]) {
-            receiptNumber = receiptMatch[1]
-          }
-        }
+        // Use Stripe's receipt_number field (format: "1246-6135")
+        const receiptNumber = charge?.receipt_number || undefined
 
         // Map Stripe status to our Transaction status
         let status: Transaction['status'] = 'pending'

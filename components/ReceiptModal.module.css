@@ -15,13 +15,13 @@
 
 .modal {
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 0;
-  max-width: 600px;
+  max-width: 650px;
   width: 100%;
   max-height: 90vh;
   position: relative;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   animation: slideIn 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -41,24 +41,46 @@
 
 /* Blue Header */
 .header {
-  background: #2563eb; /* Blue background */
-  padding: 2rem;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  padding: 2.5rem 2rem;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.5; }
 }
 
 .title {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
-  color: white; /* White text */
+  color: white;
   margin: 0;
   letter-spacing: -0.02em;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .content {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 2rem;
+  padding: 2.5rem;
+  background: #ffffff;
 }
 
 .content::-webkit-scrollbar {
@@ -81,39 +103,51 @@
 
 /* Company Section */
 .companySection {
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 3px solid #e2e8f0;
+  text-align: center;
 }
 
 .companyName {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: #1e293b;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 1rem 0;
+  letter-spacing: -0.01em;
 }
 
 .companyAddress {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #64748b;
-  line-height: 1.6;
+  line-height: 1.8;
   margin: 0;
 }
 
 /* Receipt Section */
 .receiptSection {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 6px;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
 }
 
 .receiptRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 0;
+  padding: 1rem 0;
   border-bottom: 1px solid #e2e8f0;
+  transition: background-color 0.2s ease;
+}
+
+.receiptRow:hover {
+  background-color: rgba(37, 99, 235, 0.02);
+  margin: 0 -1.5rem;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  border-radius: 4px;
 }
 
 .receiptRow:last-child {
@@ -121,83 +155,93 @@
 }
 
 .label {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #64748b;
   font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .value {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #1e293b;
   font-weight: 600;
   text-align: right;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 }
 
 /* Payment Section */
 .paymentSection {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 6px;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(to bottom, #f0fdf4 0%, #ffffff 100%);
+  border-radius: 8px;
+  border: 1px solid #d1fae5;
 }
 
 .sectionTitle {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #1e293b;
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.5rem;
+  margin: 0 0 1.25rem 0;
+  padding-bottom: 0.75rem;
   border-bottom: 2px solid #2563eb;
+  letter-spacing: -0.01em;
 }
 
 .amountValue {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   color: #059669;
   font-weight: 700;
   text-align: right;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 }
 
 .status {
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: capitalize;
+  display: inline-block;
 }
 
 .statusSuccess {
-  background: #d1fae5;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
   color: #065f46;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.1);
 }
 
 /* Product Section */
 .productSection {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 6px;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(to bottom, #fef3c7 0%, #ffffff 100%);
+  border-radius: 8px;
+  border: 1px solid #fde68a;
 }
 
 /* Customer Section */
 .customerSection {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 6px;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(to bottom, #e0f2fe 0%, #ffffff 100%);
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
 }
 
 /* Footer */
 .footer {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
   border-top: 2px solid #e2e8f0;
   text-align: center;
 }
 
 .footerText {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #64748b;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 1rem 0;
+  font-style: italic;
 }
 
 .stripeLink {
@@ -214,32 +258,35 @@
 
 /* Actions */
 .actions {
-  padding: 1.5rem 2rem;
+  padding: 1.75rem 2.5rem;
   border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: flex-end;
-  background: #f8fafc;
+  background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
 }
 
 .closeButton {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: white;
   border: none;
-  padding: 0.75rem 2rem;
-  border-radius: 6px;
+  padding: 0.875rem 2.5rem;
+  border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+  letter-spacing: 0.01em;
 }
 
 .closeButton:hover {
-  background: #1d4ed8;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.4);
 }
 
 .closeButton:active {
   transform: translateY(0);
+  box-shadow: 0 2px 4px -1px rgba(37, 99, 235, 0.3);
 }
 

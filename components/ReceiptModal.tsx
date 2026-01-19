@@ -17,19 +17,25 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
   const [fullTransaction, setFullTransaction] = useState<Transaction>(transaction)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch payment method details if not available
+  // Fetch receipt details when modal opens to ensure we have receipt_number and payment method
   useEffect(() => {
-    if (isOpen && !transaction.paymentMethod) {
+    if (isOpen) {
+      // Always fetch to ensure we have the latest receipt_number from Stripe
       setIsLoading(true)
       fetch(`/api/payments/receipt?paymentIntentId=${encodeURIComponent(transaction.paymentIntentId)}`)
         .then(res => res.json())
         .then(data => {
           if (data.success && data.transaction) {
             setFullTransaction(data.transaction)
+          } else {
+            // Fallback to original transaction if fetch fails
+            setFullTransaction(transaction)
           }
         })
         .catch(err => {
           console.error('[ReceiptModal] Error fetching receipt details:', err)
+          // Fallback to original transaction on error
+          setFullTransaction(transaction)
         })
         .finally(() => {
           setIsLoading(false)

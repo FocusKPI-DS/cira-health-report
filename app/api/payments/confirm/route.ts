@@ -59,16 +59,8 @@ export async function POST(request: NextRequest) {
 
     const charge = charges.data[0]
     const receiptUrl = charge?.receipt_url || null
-
-    // Extract receipt number from receipt URL
-    // Stripe receipt URLs format: https://pay.stripe.com/receipts/.../...
-    let receiptNumber: string | undefined
-    if (receiptUrl) {
-      const receiptMatch = receiptUrl.match(/receipts\/([^\/]+)/)
-      if (receiptMatch && receiptMatch[1]) {
-        receiptNumber = receiptMatch[1]
-      }
-    }
+    // Use Stripe's receipt_number field (format: "1246-6135")
+    const receiptNumber = charge?.receipt_number || undefined
 
     // Fetch payment method details if available
     let paymentMethod: Transaction['paymentMethod'] | undefined
