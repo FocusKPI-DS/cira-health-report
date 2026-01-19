@@ -54,13 +54,19 @@ export async function hasCompletedAnalysis(userId: string): Promise<boolean> {
  * Determines if user is first-time and if payment is required before generation
  */
 export async function getUserPaymentStatus(userId: string): Promise<UserPaymentStatus> {
+  console.log('[Payment Utils] Checking user status for userId:', userId)
+  
   const [hasPayment, hasAnalysis] = await Promise.all([
     hasSuccessfulPayment(userId),
     hasCompletedAnalysis(userId)
   ])
 
+  console.log('[Payment Utils] Payment status:', { hasPayment, hasAnalysis })
+
   const isFirstTimeUser = !hasPayment && !hasAnalysis
   const requiresPaymentBeforeGeneration = hasPayment || hasAnalysis
+
+  console.log('[Payment Utils] Final status:', { isFirstTimeUser, requiresPaymentBeforeGeneration })
 
   return {
     hasSuccessfulPayment: hasPayment,

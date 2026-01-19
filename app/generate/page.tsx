@@ -57,16 +57,67 @@ function GenerateContent() {
   
   const workflow = useGenerateWorkflow({
     initialProductName,
-    skipPaymentCheck: isFirstTimeUser === true, // Skip payment check for first-time users
-    onPaymentRequired: () => {
-      // Show payment modal when payment is required
-      setShowPaymentModal(true)
-    },
     onComplete: (productName, intendedUse, hazards) => {
       setReportData(hazards)
       workflow.setCurrentStep('completed')
     }
   })
+
+  // Override handleGenerateReport to check payment status
+  const handleGenerateReportWithPaymentCheck = async () => {
+    // If user is not authenticated, proceed as first-time user
+    if (!user) {
+      console.log('[Generate] No user, proceeding as first-time user')
+      await workflow.startAnalysisGeneration()
+      return
+    }
+
+    // If user status hasn't been checked yet, check it now
+    if (isFirstTimeUser === null && !isCheckingUserStatus) {
+      console.log('[Generate] User status not checked yet, checking now...')
+      setIsCheckingUserStatus(true)
+      try {
+        const status = await getUserPaymentStatus(user.uid)
+        setIsFirstTimeUser(status.isFirstTimeUser)
+        console.log('[Generate] User status checked:', status)
+        
+        // After checking, proceed with the logic
+        if (status.isFirstTimeUser) {
+          console.log('[Generate] First-time user, generating without payment')
+          await workflow.startAnalysisGeneration()
+        } else {
+          console.log('[Generate] Returning user, showing payment modal')
+          setShowPaymentModal(true)
+        }
+      } catch (error) {
+        console.error('[Generate] Error checking user status:', error)
+        // On error, proceed as first-time user
+        setIsFirstTimeUser(true)
+        await workflow.startAnalysisGeneration()
+      } finally {
+        setIsCheckingUserStatus(false)
+      }
+      return
+    }
+
+    // If still checking, wait a bit and retry (or proceed as first-time for better UX)
+    if (isCheckingUserStatus) {
+      console.log('[Generate] User status check in progress, proceeding as first-time user')
+      await workflow.startAnalysisGeneration()
+      return
+    }
+
+    // If first-time user, skip payment and generate directly
+    if (isFirstTimeUser === true) {
+      console.log('[Generate] First-time user, generating without payment')
+      await workflow.startAnalysisGeneration()
+      return
+    }
+
+    // Returning user - show payment modal
+    console.log('[Generate] Returning user, showing payment modal')
+    setShowPaymentModal(true)
+  }
 
   const handleViewReport = async () => {
     console.log('[Generate] handleViewReport called, analysisId:', workflow.analysisId)
@@ -159,7 +210,7 @@ function GenerateContent() {
           handleRetrySearch={workflow.handleRetrySearch}
           handleNewSearch={workflow.handleNewSearch}
           handleToggleProduct={workflow.handleToggleProduct}
-          handleGenerateReport={workflow.handleGenerateReport}
+          handleGenerateReport={handleGenerateReportWithPaymentCheck}
           styles={styles}
           renderCompleted={renderCompleted}
           countdown={workflow.countdown}
