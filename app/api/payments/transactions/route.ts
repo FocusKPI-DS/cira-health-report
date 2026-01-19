@@ -58,24 +58,38 @@ export async function GET(request: NextRequest) {
 
     // If searching by analysisId, fetch all payment intents and filter
     if (analysisId && !customer) {
-      console.log('[Fetch Transactions] Searching by analysisId...')
+      console.log('[Fetch Transactions] ===== SEARCHING BY ANALYSIS ID =====')
+      console.log('[Fetch Transactions] Looking for analysisId:', analysisId)
       
       // Fetch all PaymentIntents (limited to reasonable amount)
       let allPaymentIntents
       try {
         allPaymentIntents = await stripe.paymentIntents.list({ limit: 100 })
-        console.log('[Fetch Transactions] Found', allPaymentIntents.data.length, 'payment intents')
+        console.log('[Fetch Transactions] Total payment intents fetched:', allPaymentIntents.data.length)
       } catch (error: any) {
         console.error('[Fetch Transactions] Error listing payment intents:', error.message)
         throw new Error(`Failed to list payment intents: ${error.message}`)
       }
       
       // Filter by analysis_id in metadata
+      console.log('[Fetch Transactions] Filtering payment intents by metadata.analysis_id...')
       const matchingIntents = allPaymentIntents.data.filter(
-        (pi) => pi.metadata?.analysis_id === analysisId
+        (pi) => {
+          const metadataAnalysisId = pi.metadata?.analysis_id
+          const matches = metadataAnalysisId === analysisId
+          if (!matches && metadataAnalysisId) {
+            console.log(`[Fetch Transactions]   Payment ${pi.id}: metadata.analysis_id = "${metadataAnalysisId}" (does not match)`)
+          } else if (!metadataAnalysisId) {
+            console.log(`[Fetch Transactions]   Payment ${pi.id}: metadata.analysis_id = undefined/empty`)
+          }
+          return matches
+        }
       )
       
-      console.log('[Fetch Transactions] Found', matchingIntents.length, 'matching payment intents for analysisId')
+      console.log('[Fetch Transactions] Matching payment intents found:', matchingIntents.length)
+      if (matchingIntents.length > 0) {
+        console.log('[Fetch Transactions] Matching payment intent IDs:', matchingIntents.map(pi => pi.id))
+      }
       
       if (matchingIntents.length === 0) {
         return NextResponse.json({

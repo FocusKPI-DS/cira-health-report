@@ -405,38 +405,62 @@ function ResultsContent() {
   }
 
   const checkPaymentAndDownload = async () => {
+    console.log('[Results] ===== CHECKING PAYMENT FOR DOWNLOAD =====')
+    console.log('[Results] Analysis ID:', analysisId)
+    console.log('[Results] User ID:', user?.uid)
+    
     if (!analysisId) {
+      console.log('[Results] ❌ CONDITION FAILED: No analysis ID available')
       alert('No analysis ID available')
       return false
     }
 
     try {
-      console.log('[Results] Checking payment status for analysis:', analysisId)
+      console.log('[Results] Step 1: Querying payments by analysisId...')
+      console.log('[Results] API URL: /api/payments/transactions?analysisId=' + encodeURIComponent(analysisId))
       
       // First, check if this specific analysis has been paid for
       const analysisResponse = await fetch(`/api/payments/transactions?analysisId=${encodeURIComponent(analysisId)}`)
       
+      console.log('[Results] Response status:', analysisResponse.status, analysisResponse.statusText)
+      
       if (!analysisResponse.ok) {
+        console.log('[Results] ❌ API REQUEST FAILED')
         throw new Error('Failed to check payment status')
       }
 
       const analysisData = await analysisResponse.json()
+      console.log('[Results] Raw API response:', analysisData)
+      console.log('[Results] Total transactions in response:', analysisData.transactions?.length || 0)
+      
       const analysisPayments = analysisData.transactions?.filter((t: any) => t.status === 'succeeded') || []
+      console.log('[Results] Successful payments found:', analysisPayments.length)
       
       if (analysisPayments.length > 0) {
-        // This analysis has been paid for, proceed with download
-        console.log('[Results] Analysis payment confirmed, starting download...')
+        console.log('[Results] ✅ CONDITION MET: Payment found for this analysis')
+        console.log('[Results] Payment details:', analysisPayments[0])
+        console.log('[Results] Payment analysisId in metadata:', analysisPayments[0].analysisId)
+        console.log('[Results] Proceeding with download...')
         await performDownload()
         return true
       }
 
+      console.log('[Results] ❌ CONDITION NOT MET: No payment found with analysisId =', analysisId)
+      console.log('[Results] All transactions returned:', analysisData.transactions)
+      console.log('[Results] Checking what analysisIds are in the transactions:')
+      analysisData.transactions?.forEach((t: any, index: number) => {
+        console.log(`[Results]   Transaction ${index + 1}: analysisId = "${t.analysisId}", status = "${t.status}"`)
+      })
+
       // If no payment for this analysis, require payment for download
       // This is a safety check - they should have paid before generation, but if they bypassed that,
       // they need to pay now to download
-      console.log('[Results] No payment found for this analysis, payment required for download')
+      console.log('[Results] ===== FINAL DECISION: PAYMENT REQUIRED =====')
+      console.log('[Results] Reason: No successful payment found with metadata.analysis_id matching:', analysisId)
       return false
     } catch (error) {
-      console.error('[Results] Error checking payment:', error)
+      console.error('[Results] ===== ERROR IN PAYMENT CHECK =====')
+      console.error('[Results] Error:', error)
       return false
     }
   }

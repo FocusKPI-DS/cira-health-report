@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
@@ -28,7 +28,7 @@ function GenerateContent() {
   const [reportData, setReportData] = useState<Hazard[]>([])
   const [isFirstTimeUser, setIsFirstTimeUser] = useState<boolean | null>(null)
   const [isCheckingUserStatus, setIsCheckingUserStatus] = useState(true)
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null) // Store paymentIntentId for updating metadata
+  const paymentIntentIdRef = useRef<string | null>(null) // Use ref to persist paymentIntentId across renders
 
   const initialProductName = searchParams.get('productName') || ''
   
@@ -62,9 +62,18 @@ function GenerateContent() {
       setReportData(hazards)
       workflow.setCurrentStep('completed')
       
+      // Log when onComplete is called
+      console.log('[Generate] ===== onComplete CALLED =====')
+      console.log('[Generate] onComplete received analysisId:', analysisId)
+      console.log('[Generate] Current paymentIntentId in ref:', paymentIntentIdRef.current)
+      
       // Update payment intent metadata with actual analysis_id if payment was made before generation
-      if (analysisId && paymentIntentId) {
-        await updatePaymentMetadata(analysisId)
+      if (analysisId && paymentIntentIdRef.current) {
+        await updatePaymentMetadata(analysisId, paymentIntentIdRef.current)
+      } else if (paymentIntentIdRef.current) {
+        console.warn('[Generate] onComplete: paymentIntentId exists but analysisId is missing. Cannot update metadata.')
+      } else {
+        console.log('[Generate] onComplete: No paymentIntentId, skipping metadata update.')
       }
     }
   })
@@ -166,7 +175,7 @@ function GenerateContent() {
     workflow.reset()
     setReportData([])
     setShowReportModal(false)
-    setPaymentIntentId(null) // Clear paymentIntentId when starting new report
+    paymentIntentIdRef.current = null // Clear paymentIntentId when starting new report
   }
 
   const handlePaymentClose = () => {
@@ -175,44 +184,51 @@ function GenerateContent() {
 
   const handlePaymentSuccess = async (paymentIntentId?: string) => {
     setShowPaymentModal(false)
-    // Store paymentIntentId to update metadata after analysis is generated
+    // Store paymentIntentId in ref to update metadata after analysis is generated
     if (paymentIntentId) {
-      setPaymentIntentId(paymentIntentId)
+      paymentIntentIdRef.current = paymentIntentId
+      console.log('[Generate] Payment successful, stored paymentIntentId in ref:', paymentIntentId)
     }
     // After successful payment, start the analysis generation
     await workflow.startAnalysisGeneration()
   }
 
   // Update payment intent metadata with analysis_id after generation completes
-  const updatePaymentMetadata = async (analysisId: string) => {
-    if (!paymentIntentId) {
-      console.log('[Generate] No paymentIntentId to update')
+  const updatePaymentMetadata = async (analysisId: string, currentPaymentIntentId: string) => {
+    if (!currentPaymentIntentId) {
+      console.log('[Generate] No paymentIntentId to update - payment may not have been made before generation')
       return
     }
 
+    console.log('[Generate] ===== ATTEMPTING TO UPDATE PAYMENT METADATA =====')
+    console.log('[Generate] paymentIntentId:', currentPaymentIntentId)
+    console.log('[Generate] analysisId:', analysisId)
+
     try {
-      console.log('[Generate] Updating payment intent metadata:', paymentIntentId, 'with analysis_id:', analysisId)
       const response = await fetch('/api/payments/update-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          paymentIntentId: paymentIntentId,
+          paymentIntentId: currentPaymentIntentId,
           analysisId: analysisId,
         }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        console.error('[Generate] Failed to update payment intent:', error)
+        console.error('[Generate] ===== FAILED TO UPDATE PAYMENT INTENT =====')
+        console.error('[Generate] Error response:', error)
+        console.error('[Generate] Status:', response.status)
         return
       }
 
       const data = await response.json()
-      console.log('[Generate] Payment intent updated successfully:', data)
-      // Clear paymentIntentId after successful update
-      setPaymentIntentId(null)
+      console.log('[Generate] ===== PAYMENT INTENT UPDATED SUCCESSFULLY =====')
+      console.log('[Generate] Updated data:', data)
+      // Clear paymentIntentIdRef after successful update
+      paymentIntentIdRef.current = null
     } catch (error) {
       console.error('[Generate] Error updating payment intent:', error)
     }
