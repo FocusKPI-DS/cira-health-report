@@ -177,7 +177,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     
     if (hasIntendedUse) {
       addMessage('ai', 'Please describe the intended use of your device:', 'intended-use-input')
-      setCurrentStep('intended-use-input')
+        setCurrentStep('intended-use-input')
     } else {
       handleSearchProducts()
     }

@@ -9,6 +9,13 @@ import SignInModal from './SignInModal'
 import { Hazard } from '@/lib/types'
 import { useAuth } from '@/lib/auth'
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (command: string, ...args: any[]) => void
+  }
+}
+
 interface ReportModalProps {
   productName: string
   intendedUse: string
@@ -34,6 +41,15 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
   }
 
   const handleGenerateReport = () => {
+    // Track click generate whole report event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'click_generate_whole_report', {
+        analysis_id: analysisId || undefined,
+        product_name: productName,
+        user_type: (!user || isAnonymous) ? 'anonymous' : 'authenticated'
+      })
+    }
+    
     // If user is anonymous, show sign-in modal
     if (!user || isAnonymous) {
       setShowSignInModal(true)
