@@ -20,8 +20,54 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete }: G
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [isFirstTimeUser, setIsFirstTimeUser] = useState<boolean | null>(null)
   const [isCheckingUserStatus, setIsCheckingUserStatus] = useState(false)
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
 
-  const workflow = useGenerateWorkflow({ onComplete })
+  // Update payment intent metadata with analysis_id after generation completes
+  const updatePaymentMetadata = async (analysisId: string) => {
+    if (!paymentIntentId) {
+      console.log('[GenerateWorkflowModal] No paymentIntentId to update')
+      return
+    }
+
+    try {
+      console.log('[GenerateWorkflowModal] Updating payment intent metadata:', paymentIntentId, 'with analysis_id:', analysisId)
+      const response = await fetch('/api/payments/update-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentIntentId: paymentIntentId,
+          analysisId: analysisId,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('[GenerateWorkflowModal] Failed to update payment intent:', error)
+        return
+      }
+
+      const data = await response.json()
+      console.log('[GenerateWorkflowModal] Payment intent updated successfully:', data)
+      setPaymentIntentId(null)
+    } catch (error) {
+      console.error('[GenerateWorkflowModal] Error updating payment intent:', error)
+    }
+  }
+
+  const workflow = useGenerateWorkflow({ 
+    onComplete: async (productName, intendedUse, hazards, analysisId) => {
+      // Update payment intent metadata with actual analysis_id if payment was made before generation
+      if (analysisId && paymentIntentId) {
+        await updatePaymentMetadata(analysisId)
+      }
+      // Call original onComplete if provided
+      if (onComplete) {
+        onComplete(productName, intendedUse, hazards)
+      }
+    }
+  })
 
   // Check user payment status when modal opens
   useEffect(() => {
@@ -54,6 +100,7 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete }: G
       // Reset state when modal opens
       workflow.reset()
       setShowPaymentModal(false)
+      setPaymentIntentId(null) // Clear paymentIntentId when modal opens
     }
   }, [isOpen])
 
@@ -118,8 +165,12 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete }: G
     setShowPaymentModal(false)
   }
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (paymentIntentId?: string) => {
     setShowPaymentModal(false)
+    // Store paymentIntentId to update metadata after analysis is generated
+    if (paymentIntentId) {
+      setPaymentIntentId(paymentIntentId)
+    }
     // After successful payment, start the analysis generation
     await workflow.startAnalysisGeneration()
   }

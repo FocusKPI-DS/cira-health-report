@@ -87,7 +87,7 @@ const mockSimilarProducts: SimilarProduct[] = [
 
 interface UseGenerateWorkflowOptions {
   initialProductName?: string
-  onComplete?: (productName: string, intendedUse: string, hazards: Hazard[]) => void
+  onComplete?: (productName: string, intendedUse: string, hazards: Hazard[], analysisId?: string) => void
   onPaymentRequired?: () => void
   skipPaymentCheck?: boolean // For first-time users who can generate without payment
 }
@@ -422,8 +422,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setCurrentStep('completed')
         
         // Notify parent with empty hazards - they'll be fetched when View Report is clicked
+        // Pass analysisId to onComplete so parent can update payment metadata
         if (onComplete) {
-          onComplete(productName, intendedUse, [])
+          onComplete(productName, intendedUse, [], result.analysisId)
         }
       } else {
         // Other status (should not happen, but handle gracefully)

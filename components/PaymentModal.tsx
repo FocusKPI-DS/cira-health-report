@@ -15,7 +15,7 @@ type PaymentPurpose = 'generation' | 'download'
 
 interface PaymentModalProps {
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (paymentIntentId?: string) => void // Pass paymentIntentId on success
   reportId?: string
   analysisId?: string
   productName?: string
@@ -35,7 +35,7 @@ function PaymentFormInner({
   clientSecret,
   onProcessingChange
 }: {
-  onSuccess: () => void
+  onSuccess: (paymentIntentId?: string) => void
   onClose: () => void
   reportId?: string
   productName?: string
@@ -112,8 +112,8 @@ function PaymentFormInner({
         throw new Error('Failed to confirm payment')
       }
 
-      // Success!
-      onSuccess()
+      // Success! Pass paymentIntentId to parent
+      onSuccess(paymentIntent.id)
     } catch (err: any) {
       setError(err.message || 'Payment processing failed')
       console.error('[Payment] Error:', err)
@@ -155,7 +155,7 @@ function PaymentForm({
   amount = 5.00,
   onProcessingChange
 }: {
-  onSuccess: () => void
+  onSuccess: (paymentIntentId?: string) => void
   onClose: () => void
   reportId?: string
   analysisId?: string

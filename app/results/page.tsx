@@ -397,9 +397,10 @@ function ResultsContent() {
     setShowPaymentModal(false)
   }
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (paymentIntentId?: string) => {
     setShowPaymentModal(false)
     // After payment, check and download
+    // Note: For download payments, we don't need to update metadata since analysis already exists
     await checkPaymentAndDownload()
   }
 
