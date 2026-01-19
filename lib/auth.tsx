@@ -13,6 +13,14 @@ import {
 } from 'firebase/auth'
 import { getFirebaseAuth } from './firebase'
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (command: string, ...args: any[]) => void
+    dataLayer?: any[]
+  }
+}
+
 interface SmartLoginResult {
   user: User
   merged: boolean
@@ -64,6 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(result.user)
           setIsAnonymous(true)
           
+          // Track anonymous login event in GA4
+          if (typeof window !== 'undefined' && window.gtag) {
+            window.gtag('event', 'anon_login', {
+              user_id: result.user.uid
+            })
+          }
+          
           // Sync anonymous user with backend
           await syncUserToBackend(result.user)
           const teamId = await syncUserToApphub(result.user)
@@ -110,6 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(linkResult.user)
         setIsAnonymous(false)
         
+        // Track sign_up event in GA4 (anonymous upgrade counts as sign up)
+        if (typeof window !== 'undefined' && window.gtag) {
+          window.gtag('event', 'sign_up', {
+            method: 'email',
+            user_id: linkResult.user.uid
+          })
+        }
+        
         return { user: linkResult.user, merged: false }
       } catch (err: any) {
         // Catch both error codes for email already exists
@@ -125,6 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await signInWithEmailAndPassword(auth, email, password)
     const realUser = result.user
     console.log('Login successful:', realUser.email)
+    
+    // Track login event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'login', {
+        method: 'email',
+        user_id: realUser.uid
+      })
+    }
 
     // 3️⃣ Only merge if there's an anonymous account
     if (anonUser && anonUser.uid !== realUser.uid) {
@@ -153,7 +184,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const result = await signInWithEmailAndPassword(auth, email, password)
+      
+      // Track login event in GA4
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'login', {
+          method: 'email',
+          user_id: result.user.uid
+        })
+      }
     } catch (error: any) {
       console.error('Email login failed:', error.message)
       throw error
@@ -177,6 +216,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const finalDisplayName = displayName || email.split('@')[0]
       if (result.user) {
         await updateProfile(result.user, { displayName: finalDisplayName })
+      }
+      
+      // Track sign_up event in GA4
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'sign_up', {
+          method: 'email',
+          user_id: result.user.uid
+        })
       }
     } catch (error: any) {
       console.error('Email sign up failed:', error.message)

@@ -2,6 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { WorkflowStep, Message, SimilarProduct, Hazard } from './types'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (command: string, ...args: any[]) => void
+  }
+}
+
 // Mock similar products data (fallback only)
 const mockSimilarProducts: SimilarProduct[] = [
   {
@@ -160,6 +167,14 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
   const handleIntendedUseAnswer = (hasIntendedUse: boolean) => {
     addMessage('user', hasIntendedUse ? 'Yes' : 'No', 'intended-use-question')
+    
+    // Track intended use answer in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', hasIntendedUse ? 'intended_use_yes' : 'intended_use_no', {
+        product_name: productName
+      })
+    }
+    
     if (hasIntendedUse) {
       addMessage('ai', 'Please describe the intended use of your device:', 'intended-use-input')
       setCurrentStep('intended-use-input')
@@ -181,6 +196,14 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setCurrentStep('searching-products')
     setIsSearching(true)
     addMessage('ai', 'First, I\'ll search for similar products in the FDA product classification database...', 'searching-products')
+    
+    // Track search similar product event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'search_similar_product', {
+        product_name: productName,
+        intended_use: intendedUse || undefined
+      })
+    }
     
     try {
       // Call FDA search API
@@ -320,6 +343,16 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     if (selectedProductCodes.length === 0) {
       alert('No valid product codes selected')
       return
+    }
+    
+    // Track generate report event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'generate_report', {
+        product_name: productName,
+        intended_use: intendedUse || undefined,
+        selected_products_count: selectedProductCodes.length,
+        product_codes: selectedProductCodes.join(',')
+      })
     }
     
     // Format similar products for backend (matching the expected structure)

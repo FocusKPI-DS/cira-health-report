@@ -7,6 +7,13 @@ import Header from '@/components/Header'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
 import { LightningIcon, RobotIcon, ChartIcon, ClipboardIcon, TagIcon, RefreshIcon, CheckIcon } from '@/components/Icons'
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (command: string, ...args: any[]) => void
+  }
+}
+
 export default function Home() {
   const router = useRouter()
   const [productName, setProductName] = useState('')
@@ -15,6 +22,13 @@ export default function Home() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (productName.trim()) {
+      // Track try_it_for_free event in GA4
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'try_it_for_free', {
+          product_name: productName.trim()
+        })
+      }
+      
       router.push(`/generate?productName=${encodeURIComponent(productName)}`)
     }
   }

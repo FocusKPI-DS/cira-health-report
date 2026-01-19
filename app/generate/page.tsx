@@ -9,6 +9,13 @@ import GenerateWorkflowContent from '@/components/GenerateWorkflowContent'
 import { useGenerateWorkflow } from '@/lib/useGenerateWorkflow'
 import { Hazard } from '@/lib/types'
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (command: string, ...args: any[]) => void
+  }
+}
+
 function GenerateContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -28,6 +35,14 @@ function GenerateContent() {
   const handleViewReport = async () => {
     console.log('[Generate] handleViewReport called, analysisId:', workflow.analysisId)
     console.log('[Generate] reportData length:', reportData.length)
+    
+    // Track view report modal event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'view_report_modal', {
+        analysis_id: workflow.analysisId || undefined,
+        product_name: workflow.productName || undefined
+      })
+    }
     
     // Fetch report data if not already loaded
     if (workflow.analysisId) {

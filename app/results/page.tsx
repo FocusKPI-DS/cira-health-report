@@ -13,6 +13,13 @@ import { InfoIcon, DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { analysisApi } from '@/lib/analysis-api'
 
+// Google Analytics type declaration
+declare global {
+  interface Window {
+    gtag?: (command: string, ...args: any[]) => void
+  }
+}
+
 interface SeverityItem {
   severity: string
   severity_rowspan: number
@@ -359,6 +366,14 @@ function ResultsContent() {
   }, [report_list, isLoadingReports, analysisId, router])
 
   const handleViewReport = (report: Report) => {
+    // Track view report modal event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'view_report_modal', {
+        analysis_id: report.id,
+        product_name: report.productName
+      })
+    }
+    
     router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
   }
 
@@ -482,6 +497,14 @@ function ResultsContent() {
   }
 
   const handleGenerateWholeReport = () => {
+    // Track generate whole report event in GA4
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'generate_whole_report', {
+        analysis_id: analysisId || undefined,
+        product_name: productName || undefined
+      })
+    }
+    
     handleRestartFullAnalysis()
   }
 
