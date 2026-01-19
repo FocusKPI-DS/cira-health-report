@@ -11,6 +11,8 @@ import { Transaction } from '@/lib/types/stripe'
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
 
+type PaymentPurpose = 'generation' | 'download'
+
 interface PaymentModalProps {
   onClose: () => void
   onSuccess: () => void
@@ -18,6 +20,7 @@ interface PaymentModalProps {
   analysisId?: string
   productName?: string
   amount?: number
+  purpose?: PaymentPurpose // 'generation' = payment before generating analysis, 'download' = payment for downloading report
 }
 
 type TabType = 'payment' | 'history'
@@ -198,7 +201,7 @@ function PaymentForm({
           amount: amount,
           currency: 'usd',
           reportId: reportId,
-          analysisId: reportId,
+          analysisId: analysisId || reportId, // Use analysisId if provided, otherwise fallback to reportId
           userId: user.uid,
           productName: productName,
         }),
@@ -421,7 +424,8 @@ export default function PaymentModal({
   reportId,
   analysisId, 
   productName, 
-  amount = 5.00 
+  amount = 5.00,
+  purpose = 'download' // Default to download for backward compatibility
 }: PaymentModalProps) {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('payment')
@@ -457,9 +461,13 @@ export default function PaymentModal({
         </button>
         
         <div className={styles.modalHeader}>
-          <h2 className={styles.title}>Download Full Report</h2>
+          <h2 className={styles.title}>
+            {purpose === 'generation' ? 'Generate Analysis' : 'Download Full Report'}
+          </h2>
           <p className={styles.subtitle}>
-            Complete your purchase to download the comprehensive PHA analysis
+            {purpose === 'generation' 
+              ? 'Complete your purchase to generate the comprehensive PHA analysis'
+              : 'Complete your purchase to download the comprehensive PHA analysis'}
           </p>
         </div>
 

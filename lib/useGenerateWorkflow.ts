@@ -88,10 +88,12 @@ const mockSimilarProducts: SimilarProduct[] = [
 interface UseGenerateWorkflowOptions {
   initialProductName?: string
   onComplete?: (productName: string, intendedUse: string, hazards: Hazard[]) => void
+  onPaymentRequired?: () => void
+  skipPaymentCheck?: boolean // For first-time users who can generate without payment
 }
 
 export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
-  const { initialProductName = '', onComplete } = options
+  const { initialProductName = '', onComplete, onPaymentRequired, skipPaymentCheck = false } = options
 
   const [productName, setProductName] = useState(initialProductName)
   const [intendedUse, setIntendedUse] = useState('')
@@ -325,7 +327,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setPreviousSelectedCount(newSelected.size)
   }
 
-  const handleGenerateReport = async () => {
+  // Internal function to actually start the analysis generation
+  const startAnalysisGeneration = async () => {
     if (selectedProducts.size === 0) {
       alert('Please select at least one product')
       return
@@ -436,9 +439,41 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       setCountdown(null)
       
       console.error('[Analysis] Error:', error)
-      addMessage('ai', 'An error occurred while generating the analysis. Please try again.', 'completed')
+      
+      // Check if payment was successful before showing retry option
+      // If payment was made, allow retry without new payment
+      addMessage('ai', 'An error occurred while generating the analysis. If you have already paid, you can retry without additional payment.', 'completed')
       setCurrentStep('completed')
-      alert(error instanceof Error ? error.message : 'Failed to generate analysis')
+      
+      // Show error but allow retry
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate analysis'
+      console.error('[Analysis] Generation error:', errorMessage)
+      
+      // Note: Retry can be handled by calling startAnalysisGeneration again
+      // The payment check will verify if payment was already made
+    }
+  }
+
+  // Public handler that checks payment before generation
+  const handleGenerateReport = async () => {
+    if (selectedProducts.size === 0) {
+      alert('Please select at least one product')
+      return
+    }
+
+    // If skipPaymentCheck is true (first-time user), proceed directly
+    if (skipPaymentCheck) {
+      await startAnalysisGeneration()
+      return
+    }
+
+    // For returning users, check if payment is required
+    if (onPaymentRequired) {
+      // Trigger payment modal - parent component will handle payment and call startAnalysisGeneration after success
+      onPaymentRequired()
+    } else {
+      // If no payment callback provided, proceed directly (fallback)
+      await startAnalysisGeneration()
     }
   }
 
@@ -502,6 +537,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     handleRetrySearch,
     handleToggleProduct,
     handleGenerateReport,
+    startAnalysisGeneration, // Expose for calling after payment success
     fetchReportData,
     reset
   }

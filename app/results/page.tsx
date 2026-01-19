@@ -412,28 +412,43 @@ function ResultsContent() {
     try {
       console.log('[Results] Checking payment status for analysis:', analysisId)
       
-      // Check if this analysis has been paid for
-      const response = await fetch(`/api/payments/transactions?analysisId=${encodeURIComponent(analysisId)}`)
+      // First, check if this specific analysis has been paid for
+      const analysisResponse = await fetch(`/api/payments/transactions?analysisId=${encodeURIComponent(analysisId)}`)
       
-      if (!response.ok) {
+      if (!analysisResponse.ok) {
         throw new Error('Failed to check payment status')
       }
 
-      const data = await response.json()
-      const successfulPayments = data.transactions?.filter((t: any) => t.status === 'succeeded') || []
+      const analysisData = await analysisResponse.json()
+      const analysisPayments = analysisData.transactions?.filter((t: any) => t.status === 'succeeded') || []
       
-      console.log('[Results] Found', successfulPayments.length, 'successful payments')
-      
-      if (successfulPayments.length > 0) {
-        // Payment found, proceed with download
-        console.log('[Results] Payment confirmed, starting download...')
+      if (analysisPayments.length > 0) {
+        // This analysis has been paid for, proceed with download
+        console.log('[Results] Analysis payment confirmed, starting download...')
         await performDownload()
         return true
-      } else {
-        // No payment found
-        console.log('[Results] No payment found for this analysis')
-        return false
       }
+
+      // If no payment for this analysis, check if user is first-time
+      if (user) {
+        const { getUserPaymentStatus } = await import('@/lib/payment-utils')
+        const userStatus = await getUserPaymentStatus(user.uid)
+        
+        if (userStatus.isFirstTimeUser) {
+          // First-time user: require payment for download
+          console.log('[Results] First-time user, payment required for download')
+          return false
+        } else {
+          // Returning user: already paid before generation, allow free download
+          console.log('[Results] Returning user, allowing free download (already paid before generation)')
+          await performDownload()
+          return true
+        }
+      }
+      
+      // No user or couldn't determine status, require payment
+      console.log('[Results] No payment found for this analysis')
+      return false
     } catch (error) {
       console.error('[Results] Error checking payment:', error)
       return false

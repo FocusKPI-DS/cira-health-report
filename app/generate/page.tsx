@@ -5,8 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
 import ReportModal from '@/components/ReportModal'
+import PaymentModal from '@/components/PaymentModal'
 import GenerateWorkflowContent from '@/components/GenerateWorkflowContent'
 import { useGenerateWorkflow } from '@/lib/useGenerateWorkflow'
+import { getUserPaymentStatus } from '@/lib/payment-utils'
+import { useAuth } from '@/lib/auth'
 import { Hazard } from '@/lib/types'
 
 // Google Analytics type declaration
@@ -19,13 +22,46 @@ declare global {
 function GenerateContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user, loading: authLoading } = useAuth()
   const [showReportModal, setShowReportModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [reportData, setReportData] = useState<Hazard[]>([])
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState<boolean | null>(null)
+  const [isCheckingUserStatus, setIsCheckingUserStatus] = useState(true)
 
   const initialProductName = searchParams.get('productName') || ''
   
+  // Check user payment status on mount
+  useEffect(() => {
+    const checkUserStatus = async () => {
+      if (authLoading || !user) {
+        setIsCheckingUserStatus(false)
+        return
+      }
+
+      try {
+        const status = await getUserPaymentStatus(user.uid)
+        setIsFirstTimeUser(status.isFirstTimeUser)
+        console.log('[Generate] User status:', status)
+      } catch (error) {
+        console.error('[Generate] Error checking user status:', error)
+        // Default to first-time user on error
+        setIsFirstTimeUser(true)
+      } finally {
+        setIsCheckingUserStatus(false)
+      }
+    }
+
+    checkUserStatus()
+  }, [user, authLoading])
+  
   const workflow = useGenerateWorkflow({
     initialProductName,
+    skipPaymentCheck: isFirstTimeUser === true, // Skip payment check for first-time users
+    onPaymentRequired: () => {
+      // Show payment modal when payment is required
+      setShowPaymentModal(true)
+    },
     onComplete: (productName, intendedUse, hazards) => {
       setReportData(hazards)
       workflow.setCurrentStep('completed')
@@ -66,6 +102,16 @@ function GenerateContent() {
     workflow.reset()
     setReportData([])
     setShowReportModal(false)
+  }
+
+  const handlePaymentClose = () => {
+    setShowPaymentModal(false)
+  }
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false)
+    // After successful payment, start the analysis generation
+    await workflow.startAnalysisGeneration()
   }
 
   const renderCompleted = () => (
@@ -127,6 +173,16 @@ function GenerateContent() {
           hazards={reportData}
           analysisId={workflow.analysisId}
           onClose={() => setShowReportModal(false)}
+        />
+      )}
+
+      {showPaymentModal && (
+        <PaymentModal
+          onClose={handlePaymentClose}
+          onSuccess={handlePaymentSuccess}
+          productName={workflow.productName}
+          amount={5.00}
+          purpose="generation"
         />
       )}
     </main>
