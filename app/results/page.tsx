@@ -429,25 +429,10 @@ function ResultsContent() {
         return true
       }
 
-      // If no payment for this analysis, check if user is first-time
-      if (user) {
-        const { getUserPaymentStatus } = await import('@/lib/payment-utils')
-        const userStatus = await getUserPaymentStatus(user.uid)
-        
-        if (userStatus.isFirstTimeUser) {
-          // First-time user: require payment for download
-          console.log('[Results] First-time user, payment required for download')
-          return false
-        } else {
-          // Returning user: already paid before generation, allow free download
-          console.log('[Results] Returning user, allowing free download (already paid before generation)')
-          await performDownload()
-          return true
-        }
-      }
-      
-      // No user or couldn't determine status, require payment
-      console.log('[Results] No payment found for this analysis')
+      // If no payment for this analysis, require payment for download
+      // This is a safety check - they should have paid before generation, but if they bypassed that,
+      // they need to pay now to download
+      console.log('[Results] No payment found for this analysis, payment required for download')
       return false
     } catch (error) {
       console.error('[Results] Error checking payment:', error)

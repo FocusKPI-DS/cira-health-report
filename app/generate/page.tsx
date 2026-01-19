@@ -65,6 +65,13 @@ function GenerateContent() {
 
   // Override handleGenerateReport to check payment status
   const handleGenerateReportWithPaymentCheck = async () => {
+    console.log('[Generate] ===== handleGenerateReportWithPaymentCheck CALLED =====')
+    console.log('[Generate] Current state:', { 
+      user: user?.uid, 
+      isFirstTimeUser, 
+      isCheckingUserStatus 
+    })
+    
     // If user is not authenticated, proceed as first-time user
     if (!user) {
       console.log('[Generate] No user, proceeding as first-time user')

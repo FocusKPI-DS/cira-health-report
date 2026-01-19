@@ -455,7 +455,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   }
 
   // Public handler that checks payment before generation
+  // NOTE: This should be overridden by parent component with payment check logic
   const handleGenerateReport = async () => {
+    console.log('[Workflow] ===== handleGenerateReport CALLED (workflow hook) =====')
+    console.log('[Workflow] skipPaymentCheck:', skipPaymentCheck, 'onPaymentRequired:', !!onPaymentRequired)
+    
     if (selectedProducts.size === 0) {
       alert('Please select at least one product')
       return
@@ -463,15 +467,18 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
     // If skipPaymentCheck is true (first-time user), proceed directly
     if (skipPaymentCheck) {
+      console.log('[Workflow] skipPaymentCheck is true, proceeding directly')
       await startAnalysisGeneration()
       return
     }
 
     // For returning users, check if payment is required
     if (onPaymentRequired) {
+      console.log('[Workflow] Calling onPaymentRequired callback')
       // Trigger payment modal - parent component will handle payment and call startAnalysisGeneration after success
       onPaymentRequired()
     } else {
+      console.log('[Workflow] No onPaymentRequired callback, proceeding directly (FALLBACK - THIS SHOULD NOT HAPPEN)')
       // If no payment callback provided, proceed directly (fallback)
       await startAnalysisGeneration()
     }
