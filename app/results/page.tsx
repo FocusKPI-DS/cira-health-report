@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense, JSX } from 'react'
+import { useState, useEffect, useRef, Suspense, JSX } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
@@ -75,6 +75,15 @@ function ResultsContent() {
     aiTotalRecords: number
     aiProgressPercentage: number
   } | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(5)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalHazards, setTotalHazards] = useState(0)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [severityLevel, setSeverityLevel] = useState('all')
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -84,6 +93,73 @@ function ResultsContent() {
       day: 'numeric' 
     })
   }
+
+  // Stop any existing polling
+  const stopPolling = () => {
+    if (pollingTimerRef.current) {
+      console.log('[Results] Stopping existing polling')
+      clearTimeout(pollingTimerRef.current)
+      pollingTimerRef.current = null
+    }
+  }
+
+  // Start polling for analysis status
+  const startPolling = (analysisIdToMonitor: string) => {
+    stopPolling() // Clear any existing polling first
+    
+    console.log('[Results] Starting polling for analysis:', analysisIdToMonitor)
+    
+    const pollStatus = async () => {
+      try {
+        const response = await analysisApi.getAnalysisResults(analysisIdToMonitor, currentPage, pageSize, severityLevel, searchKeyword)
+        console.log('[Results] Polling status:', response.status)
+        
+        // Update table data and pagination info from polling response
+        setCurrentHazards(response.results || [])
+        setTotalPages(response.total_pages || 1)
+        setTotalHazards(response.total || 0)
+        setTotalRecords(response.total_records || 0)
+        
+        if (response.status !== 'Generating') {
+          console.log('[Results] Analysis completed, stopping polling')
+          setIsGenerating(false)
+          setProgressData(null)
+          stopPolling()
+          // Reload to show new results
+          window.location.reload()
+        } else {
+          // Update progress data
+          setProgressData({
+            totalDetailRecords: response.total_detail_records || 0,
+            planTotalRecords: response.plan_total_records || 0,
+            progressPercentage: response.progress_percentage || 0,
+            aiCurrentCount: response.ai_current_count || 0,
+            aiTotalRecords: response.ai_total_records || 0,
+            aiProgressPercentage: response.ai_progress_percentage || 0
+          })
+          // Continue polling
+          pollingTimerRef.current = setTimeout(pollStatus, 7000)
+        }
+      } catch (error) {
+        console.error('[Results] Error polling status:', error)
+        setIsGenerating(false)
+        stopPolling()
+      }
+    }
+    
+    // Start first poll after 2 seconds
+    pollingTimerRef.current = setTimeout(pollStatus, 2000)
+  }
+
+  // Debounce search input to avoid API calls on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchKeyword(searchInput)
+      setCurrentPage(1)
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   useEffect(() => {
     const product = searchParams.get('productName') || ''
@@ -123,19 +199,25 @@ function ResultsContent() {
     const fetchHazardData = async () => {
       if (!analysisId) return
       
+      // Stop any existing polling when switching to a different analysis
+      stopPolling()
+      
       setIsLoadingHazards(true)
       try {
-        console.log('[Results] Fetching hazard data for analysis_id:', analysisId)
-        const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
+        console.log('[Results] Fetching hazard data for analysis_id:', analysisId, 'page:', currentPage, 'pageSize:', pageSize, 'severity:', severityLevel, 'search:', searchKeyword)
+        const response = await analysisApi.getAnalysisResults(analysisId, currentPage, pageSize, severityLevel, searchKeyword)
         //console.log('[Results] Fetched results:', response)
         //console.log('[Results] Results array:', response.results)
         if (response.results && response.results.length > 0) {
           console.log('[Results] First hazard structure:', JSON.stringify(response.results[0], null, 2))
         }
         setCurrentHazards(response.results || [])
-        
+        setTotalPages(response.total_pages || 1)
+        setTotalHazards(response.total || 0)
+        setTotalRecords(response.total_records || 0)
         // Update progress data if status is Generating
         if (response.status === 'Generating') {
+          console.log('[Results] Analysis is generating, setting up progress tracking')
           setProgressData({
             totalDetailRecords: response.total_detail_records || 0,
             planTotalRecords: response.plan_total_records || 0,
@@ -144,8 +226,14 @@ function ResultsContent() {
             aiTotalRecords: response.ai_total_records || 0,
             aiProgressPercentage: response.ai_progress_percentage || 0
           })
+          // Start polling if not already polling
+          if (!pollingTimerRef.current) {
+            startPolling(analysisId)
+          }
         } else {
+          console.log('[Results] Analysis completed or not generating')
           setProgressData(null)
+          stopPolling()
         }
         
         // Fetch filter settings to check automatic_settings_enabled
@@ -166,7 +254,12 @@ function ResultsContent() {
     }
     
     fetchHazardData()
-  }, [analysisId])
+    
+    // Cleanup: stop polling when component unmounts or dependencies change
+    return () => {
+      stopPolling()
+    }
+  }, [analysisId, currentPage, pageSize, severityLevel, searchKeyword])
 
   // Fetch report list from API when user is available
   useEffect(() => {
@@ -239,34 +332,8 @@ function ResultsContent() {
           // Navigate to the results page with generating flag
           router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
           
-          // Poll for completion
-          const pollStatus = async () => {
-            try {
-              const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
-              if (response.status !== 'Generating') {
-                setIsGenerating(false)
-                setProgressData(null)
-                // Reload the page to show new results
-                window.location.reload()
-              } else {
-                // Update progress data during polling
-                setProgressData({
-                  totalDetailRecords: response.total_detail_records || 0,
-                  planTotalRecords: response.plan_total_records || 0,
-                  progressPercentage: response.progress_percentage || 0,
-                  aiCurrentCount: response.ai_current_count || 0,
-                  aiTotalRecords: response.ai_total_records || 0,
-                  aiProgressPercentage: response.ai_progress_percentage || 0
-                })
-                setTimeout(pollStatus, 7000)
-              }
-            } catch (error) {
-              console.error('[Results] Error polling status:', error)
-              setIsGenerating(false)
-            }
-          }
-          
-          setTimeout(pollStatus, 2000)
+          // Start polling for completion using unified polling function
+          startPolling(analysisId)
         } catch (error) {
           console.error('[Results] Error restarting analysis:', error)
           alert('Failed to restart analysis. Please try again.')
@@ -444,34 +511,8 @@ function ResultsContent() {
       // Navigate to the results page with generating flag
       router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
       
-      // Poll for completion
-      const pollStatus = async () => {
-        try {
-          const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
-          if (response.status !== 'Generating') {
-            setIsGenerating(false)
-            setProgressData(null)
-            // Reload the page to show new results
-            window.location.reload()
-          } else {
-            // Update progress data during polling
-            setProgressData({
-              totalDetailRecords: response.total_detail_records || 0,
-              planTotalRecords: response.plan_total_records || 0,
-              progressPercentage: response.progress_percentage || 0,
-              aiCurrentCount: response.ai_current_count || 0,
-              aiTotalRecords: response.ai_total_records || 0,
-              aiProgressPercentage: response.ai_progress_percentage || 0
-            })
-            setTimeout(pollStatus, 7000)
-          }
-        } catch (error) {
-          console.error('[Results] Error polling status:', error)
-          setIsGenerating(false)
-        }
-      }
-      
-      setTimeout(pollStatus, 2000)
+      // Start polling for completion using unified polling function
+      startPolling(analysisId)
     } catch (error) {
       console.error('[Results] Error restarting analysis:', error)
       alert('Failed to restart analysis. Please try again.')
@@ -615,6 +656,72 @@ function ResultsContent() {
               </div>
             )}
 
+            {/* Filter and Search Controls - Always visible */}
+            {!isLoadingHazards && (
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* Search Input */}
+                  <div style={{ flex: '1 1 300px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                      Search
+                    </label>
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => {
+                        setSearchInput(e.target.value)
+                      }}
+                      placeholder="Search hazards, harms..."
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid rgba(14, 165, 233, 0.2)',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  
+                  {/* Severity Filter */}
+                  <div style={{ flex: '0 0 200px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                      Severity Level
+                    </label>
+                    <select
+                      value={severityLevel}
+                      onChange={(e) => {
+                        setSeverityLevel(e.target.value)
+                        setCurrentPage(1) // Reset to first page on filter change
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid rgba(14, 165, 233, 0.2)',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        backgroundColor: 'white'
+                      }}
+                    >
+                      <option value="all">All Severities</option>
+                      <option value="Negligible">Negligible</option>
+                      <option value="Minor">Minor</option>
+                      <option value="Serious">Serious</option>
+                      <option value="Critical">Critical</option>
+                      <option value="Catastrophic">Catastrophic</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {/* Results Info */}
+                <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                  Total Records: {totalRecords}
+                </div>
+                <div style={{ marginTop: '12px', fontSize: '14px', color: '#64748b' }}>
+                  Showing {hazards.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalHazards)} of {totalHazards} Hazards
+                </div>
+              </div>
+            )}
+
             {isLoadingHazards ? (
               <div className={styles.generatingState}>
                 <div className={styles.generatingSpinner}></div>
@@ -625,6 +732,8 @@ function ResultsContent() {
                 <p className={styles.generatingText}>No hazard data available</p>
               </div>
             ) : (
+              <>
+
               <div className={styles.tableContainer}>
           <table className={styles.table}>
             <thead>
@@ -691,6 +800,82 @@ function ResultsContent() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+              background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+              color: currentPage === 1 ? '#94a3b8' : 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            ← Previous
+          </button>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+              Page {currentPage} of {totalPages}
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                Items per page:
+              </label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value))
+                  setCurrentPage(1)
+                }}
+                style={{
+                  padding: '6px 10px',
+                  border: '1px solid rgba(14, 165, 233, 0.2)',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+          
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage >= totalPages}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+              background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+              color: currentPage >= totalPages ? '#94a3b8' : 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Next →
+          </button>
+        </div>
+              </>
             )}
 
         {(!user || isAnonymous) && hazards.length > 0 && (

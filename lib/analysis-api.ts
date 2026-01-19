@@ -22,9 +22,12 @@ export interface AnalysisStatusResponse {
 export interface AnalysisResultResponse {
   results: any[]
   total_count: number
+  total: number
+  total_pages: number
   page: number
   page_size: number
   status?: 'Generating' | 'Completed' | 'Failed'
+  total_records?: number
   total_detail_records?: number
   plan_total_records?: number
   progress_percentage?: number
@@ -173,11 +176,29 @@ export const analysisApi = {
    * @param analysisId The analysis ID
    * @param page Page number (default: 1)
    * @param pageSize Page size (default: 20)
+   * @param severityLevel Severity filter (default: 'all')
+   * @param searchKeyword Search keyword (optional)
    */
-  async getAnalysisResults(analysisId: string, page: number = 1, pageSize: number = 20): Promise<AnalysisResultResponse> {
+  async getAnalysisResults(
+    analysisId: string, 
+    page: number = 1, 
+    pageSize: number = 20,
+    severityLevel: string = 'all',
+    searchKeyword: string = ''
+  ): Promise<AnalysisResultResponse> {
     const headers = await getAuthHeaders()
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+      severity_level: severityLevel,
+    })
+    
+    if (searchKeyword) {
+      params.append('search_keyword', searchKeyword)
+    }
+    
     const response = await fetch(
-      `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/grouped-details?page=${page}&page_size=${pageSize}`,
+      `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/grouped-details?${params.toString()}`,
       {
         method: 'GET',
         headers,
