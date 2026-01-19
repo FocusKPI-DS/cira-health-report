@@ -738,18 +738,20 @@ function ResultsContent() {
                       <option value="Negligible">Negligible</option>
                       <option value="Minor">Minor</option>
                       <option value="Serious">Serious</option>
+                      <option value="Major">Major</option>
                       <option value="Critical">Critical</option>
-                      <option value="Catastrophic">Catastrophic</option>
                     </select>
                   </div>
                 </div>
                 
                 {/* Results Info */}
                 <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                  Total Records: {totalRecords}
-                </div>
-                <div style={{ marginTop: '12px', fontSize: '14px', color: '#64748b' }}>
+                  
+                
+                  <span style={{ marginTop: '12px', marginRight: '20px', fontSize: '14px', color: '#64748b' }}>
                   Showing {hazards.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalHazards)} of {totalHazards} Hazards
+                  </span>
+                  Total Details: {totalRecords}
                 </div>
               </div>
             )}
