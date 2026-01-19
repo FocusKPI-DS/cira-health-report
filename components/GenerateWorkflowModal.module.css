@@ -71,10 +71,12 @@
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   padding: 1.5rem;
-  height: calc(90vh - 2rem);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  max-height: calc(90vh - 2rem);
 }
 
 .message {
@@ -85,8 +87,8 @@
   align-items: flex-start;
 }
 
-.message:has(.userAvatar) {
-  flex-direction: row-reverse;
+.message:has(.userMessage) {
+  justify-content: flex-end;
 }
 
 @keyframes fadeIn {
@@ -106,30 +108,22 @@
   flex-shrink: 0;
 }
 
-.aiAvatar,
-.userAvatar {
+.aiAvatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.6875rem;
-  font-weight: 600;
   flex-shrink: 0;
-  letter-spacing: 0.02em;
-}
-
-.aiAvatar {
-  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
-  color: white;
+  overflow: hidden;
   box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
 }
 
-.userAvatar {
-  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(100, 116, 139, 0.3);
+.aiAvatarImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .messageContent {
@@ -138,6 +132,11 @@
   padding: 0.875rem 1.125rem;
   border-radius: 12px;
   position: relative;
+}
+
+.message:has(.userMessage) .messageContent {
+  max-width: 75%;
+  flex: 0 1 auto;
 }
 
 .messageContent:not(.userMessage) {

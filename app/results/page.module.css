@@ -3,7 +3,10 @@
   background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #d1fae5 100%);
   padding: 2rem;
   padding-top: 6rem;
+  padding-bottom: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .pageContent {
@@ -25,7 +28,7 @@
   left: max(2rem, calc((100vw - 1400px) / 2));
   top: 7rem;
   width: 380px;
-  max-height: calc(100vh - 9rem);
+  max-height: calc(100vh - 9rem - 80px);
   z-index: 10;
   transition: width 0.3s ease, left 0.3s ease;
 }
@@ -138,7 +141,7 @@
   border: 1px solid rgba(14, 165, 233, 0.1);
   border-radius: 8px;
   padding: 1.5rem;
-  max-height: calc(100vh - 9rem);
+  max-height: calc(100vh - 9rem - 80px);
   overflow-y: auto;
   transition: width 0.3s ease;
 }
@@ -386,7 +389,7 @@
 }
 
 .title {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #1e293b;
   margin-bottom: 0.5rem;
@@ -395,24 +398,57 @@
 
 .productInfo {
   margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  width: 100%;
+  max-width: 100%;
 }
 
-.productName {
-  font-size: 1rem;
-  color: #64748b;
-  margin-bottom: 0.5rem;
-}
-
-.productName strong {
-  color: #1e293b;
-  font-weight: 600;
-}
-
-.productDescription {
-  font-size: 0.95rem;
-  color: #475569;
-  line-height: 1.6;
+.intendedUseDetails {
   margin: 0;
+}
+
+.intendedUseSummary {
+  font-size: 0.85rem;
+  color: #64748b;
+  cursor: pointer;
+  list-style: none;
+  padding: 0;
+  user-select: none;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intendedUseSummary::-webkit-details-marker {
+  display: none;
+}
+
+.intendedUseSummary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+  color: #0ea5e9;
+}
+
+.intendedUseDetails[open] .intendedUseSummary::before {
+  transform: rotate(90deg);
+}
+
+.intendedUseContent {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(14, 165, 233, 0.1);
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.6;
+  white-space: pre-wrap;
   max-width: 800px;
 }
 
@@ -438,7 +474,7 @@
   font-weight: 600;
   color: #1e293b;
   border-bottom: 1px solid rgba(14, 165, 233, 0.2);
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   user-select: none;
@@ -479,7 +515,7 @@
 .severityBadge {
   padding: 0.25rem 0.5rem;
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   white-space: nowrap;
   display: inline-block;
@@ -558,23 +594,23 @@
 .downloadButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
   color: white;
   font-size: 0.95rem;
   font-weight: 600;
-  padding: 0.75rem 1.5rem;
+  padding: 0.65rem 1.25rem;
   border: none;
   border-radius: 6px;
   transition: all 0.3s ease;
-  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.3);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .downloadButton svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .downloadButton:hover {

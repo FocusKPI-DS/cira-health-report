@@ -86,7 +86,7 @@ export default function InvoicesPage() {
   }
 
   return (
-    <main className={styles.main}>
+    <main className={styles.main} style={{ flex: 1 }}>
       <Header showUserMenu={true} />
       <div className={styles.container}>
         <div className={styles.header}>

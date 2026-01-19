@@ -9,9 +9,10 @@ import { useAuth } from '@/lib/auth'
 interface HeaderProps {
   showAuthButtons?: boolean
   showUserMenu?: boolean
+  showNavMenu?: boolean
 }
 
-export default function Header({ showAuthButtons = true, showUserMenu = false }: HeaderProps) {
+export default function Header({ showAuthButtons = true, showUserMenu = false, showNavMenu = false }: HeaderProps) {
   const router = useRouter()
   const { user, isAnonymous, loading, currentTeamId } = useAuth()
 
@@ -26,6 +27,21 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
     }
   }
 
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
+    e.preventDefault()
+    const element = document.getElementById(sectionId)
+    if (element) {
+      const headerOffset = 80
+      const elementPosition = element.getBoundingClientRect().top
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      })
+    }
+  }
+
   // Determine what to show based on auth state and props
   const shouldShowUserMenu = showUserMenu && user && !isAnonymous && !loading
   const shouldShowAuthButtons = showAuthButtons && (!user || isAnonymous) && !loading
@@ -34,8 +50,24 @@ export default function Header({ showAuthButtons = true, showUserMenu = false }:
     <div className={styles.navbar}>
       <div className={styles.navContainer}>
         <Link href="/" className={styles.logo}>
-          <img src="/images/cira-logo.png" alt="Cira Health" style={{ height: '48px' }} />
+          <img src="/images/cira-logo.png" alt="Cira Health" style={{ height: '36px' }} />
         </Link>
+        {showNavMenu && (
+          <nav className={styles.navMenu}>
+            <a href="#hero" onClick={(e) => handleNavClick(e, 'hero')} className={styles.navLink}>
+              Home
+            </a>
+            <a href="#datasources" onClick={(e) => handleNavClick(e, 'datasources')} className={styles.navLink}>
+              Data Sources
+            </a>
+            <a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className={styles.navLink}>
+              FAQ
+            </a>
+            <a href="#contact" onClick={(e) => handleNavClick(e, 'contact')} className={styles.navLink}>
+              Contact
+            </a>
+          </nav>
+        )}
         <div className={styles.navActions}>
           {shouldShowUserMenu && <UserMenu />}
           {false && shouldShowAuthButtons && (

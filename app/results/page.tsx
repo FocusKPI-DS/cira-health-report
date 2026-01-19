@@ -48,6 +48,7 @@ interface Report {
   intendedUse: string
   createdAt: string
   hazardCount: number
+  productCodes?: string[]
 }
 
 function ResultsContent() {
@@ -93,12 +94,18 @@ function ResultsContent() {
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    })
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) {
+        return dateString
+      }
+      const month = (date.getMonth() + 1).toString().padStart(2, '0')
+      const day = date.getDate().toString().padStart(2, '0')
+      const year = date.getFullYear().toString().slice(-2)
+      return `${month}/${day}/${year}`
+    } catch (e) {
+      return dateString
+    }
   }
 
   // Stop any existing polling
@@ -279,13 +286,26 @@ function ResultsContent() {
         const analyses = await analysisApi.fetchReportList()
         console.log('[Results] Received analyses:', analyses)
         
-        const formattedReports: Report[] = analyses.map((analysis: any) => ({
-          id: analysis.analysis_id,
-          productName: analysis.device_name || 'Unknown Device',
-          intendedUse: analysis.intended_use || '',
-          createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          hazardCount: analysis.hazard_count || 0
-        }))
+        const formattedReports: Report[] = analyses.map((analysis: any) => {
+          // Extract product codes from product_codes field (could be string or array)
+          let productCodes: string[] = []
+          if (analysis.product_codes) {
+            if (typeof analysis.product_codes === 'string') {
+              productCodes = analysis.product_codes.split(',').map((code: string) => code.trim()).filter(Boolean)
+            } else if (Array.isArray(analysis.product_codes)) {
+              productCodes = analysis.product_codes
+            }
+          }
+          
+          return {
+            id: analysis.analysis_id,
+            productName: analysis.device_name || 'Unknown Device',
+            intendedUse: analysis.intended_use || '',
+            createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            hazardCount: analysis.hazard_count || 0,
+            productCodes: productCodes
+          }
+        })
         console.log('[Results] Formatted reports:', formattedReports)
         setReport_list(formattedReports)
       } catch (error) {
@@ -550,7 +570,7 @@ function ResultsContent() {
   }
 
   return (
-    <main className={styles.main}>
+    <main className={styles.main} style={{ flex: 1 }}>
       <Header showAuthButtons={!user || isAnonymous} showUserMenu={!!(user && !isAnonymous)} />
       <div className={`${styles.pageContent} ${!isSidebarExpanded ? styles.pageContentCollapsed : ''}`}>
         <div className={`${styles.sidebarWrapper} ${!isSidebarExpanded ? styles.sidebarWrapperCollapsed : ''}`}>
@@ -609,10 +629,11 @@ function ResultsContent() {
                       >
                         <div className={styles.historyItemHeader}>
                           <span className={styles.historyItemName}>{report.productName}</span>
-                          <span className={styles.historyItemDate}>{formatDate(report.createdAt)}</span>
                         </div>
-                        <p className={styles.historyItemDesc}>{report.intendedUse}</p>
-                        <span className={styles.historyItemHazards}>{report.hazardCount} Hazards</span>
+                        {report.productCodes && report.productCodes.length > 0 && (
+                          <p className={styles.historyItemDesc}>{report.productCodes.join(', ')}</p>
+                        )}
+                        <span className={styles.historyItemHazards}>{report.hazardCount} Hazards • {formatDate(report.createdAt)}</span>
                       </button>
                     ))
                   )}
@@ -631,7 +652,7 @@ function ResultsContent() {
         ) : (
           <>
             <div className={styles.header}>
-              <h1 className={styles.title}>First PHA Analysis Draft</h1>
+              <h1 className={styles.title}>{productName || 'PHA Analysis Draft'}</h1>
               {user && automaticSettingsEnabled && (
                 <button className={styles.downloadButton} onClick={handleGenerateWholeReport}>
                   <DownloadIcon />
@@ -647,56 +668,53 @@ function ResultsContent() {
             </div>
             
             {progressData && (
-              <div style={{ marginTop: '8px', padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px', display: 'flex', gap: '24px' }}>
+              <div style={{ marginTop: '8px', padding: '16px', backgroundColor: 'white', border: '1px solid rgba(14, 165, 233, 0.2)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', display: 'flex', gap: '24px' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '500' }}>Detail Records Progress</span>
-                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.progressPercentage.toFixed(1)}%</span>
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>Detail Records Progress</span>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{progressData.progressPercentage.toFixed(1)}%</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
                     {progressData.totalDetailRecords} / around {progressData.planTotalRecords} records
                   </div>
-                  <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', backgroundColor: '#4CAF50', transition: 'width 0.3s ease' }}></div>
+                  <div style={{ width: '100%', height: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '5px', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', background: 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)', transition: 'width 0.3s ease', borderRadius: '5px' }}></div>
                   </div>
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '500' }}>AI Processing Progress</span>
-                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>AI Processing Progress</span>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
                     {progressData.aiCurrentCount} / Max {progressData.aiTotalRecords} records
                   </div>
-                  <div style={{ width: '100%', height: '8px', backgroundColor: '#e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', backgroundColor: '#2196F3', transition: 'width 0.3s ease' }}></div>
+                  <div style={{ width: '100%', height: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '5px', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', background: 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)', transition: 'width 0.3s ease', borderRadius: '5px' }}></div>
                   </div>
                 </div>
               </div>
             )}
             
-            {productName && (
+            {intendedUse && (
               <div className={styles.productInfo}>
-                <p className={styles.productName}>
-                  Product: <strong>{productName}</strong>
-                </p>
-                {intendedUse && (
-                  <p className={styles.productDescription}>
+                <details className={styles.intendedUseDetails}>
+                  <summary className={styles.intendedUseSummary}>
                     {intendedUse}
-                  </p>
-                )}
+                  </summary>
+                  <div className={styles.intendedUseContent}>
+                    {intendedUse}
+                  </div>
+                </details>
               </div>
             )}
 
             {/* Filter and Search Controls - Always visible */}
             {!isLoadingHazards && (
-              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
                   {/* Search Input */}
-                  <div style={{ flex: '1 1 300px' }}>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                      Search
-                    </label>
+                  <div style={{ flex: '1', minWidth: '200px' }}>
                     <input
                       type="text"
                       value={searchInput}
@@ -706,19 +724,16 @@ function ResultsContent() {
                       placeholder="Search hazards, harms..."
                       style={{
                         width: '100%',
-                        padding: '8px 12px',
+                        padding: '6px 10px',
                         border: '1px solid rgba(14, 165, 233, 0.2)',
                         borderRadius: '6px',
-                        fontSize: '14px'
+                        fontSize: '13px'
                       }}
                     />
                   </div>
                   
                   {/* Severity Filter */}
-                  <div style={{ flex: '0 0 200px' }}>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                      Severity Level
-                    </label>
+                  <div style={{ flex: '0 0 160px' }}>
                     <select
                       value={severityLevel}
                       onChange={(e) => {
@@ -727,10 +742,10 @@ function ResultsContent() {
                       }}
                       style={{
                         width: '100%',
-                        padding: '8px 12px',
+                        padding: '6px 10px',
                         border: '1px solid rgba(14, 165, 233, 0.2)',
                         borderRadius: '6px',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         backgroundColor: 'white'
                       }}
                     >
@@ -742,16 +757,11 @@ function ResultsContent() {
                       <option value="Critical">Critical</option>
                     </select>
                   </div>
-                </div>
-                
-                {/* Results Info */}
-                <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
                   
-                
-                  <span style={{ marginTop: '12px', marginRight: '20px', fontSize: '14px', color: '#64748b' }}>
-                  Showing {hazards.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalHazards)} of {totalHazards} Hazards
-                  </span>
-                  Total Details: {totalRecords}
+                  {/* Results Info */}
+                  <div style={{ flex: '0 0 auto', fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                    Showing {hazards.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalHazards)} of {totalHazards} Hazards • Total Details: {totalRecords}
+                  </div>
                 </div>
               </div>
             )}
@@ -865,7 +875,7 @@ function ResultsContent() {
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <label style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                Items per page:
+                Hazards per page:
               </label>
               <select
                 value={pageSize}

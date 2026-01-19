@@ -15,6 +15,7 @@ interface Report {
   intendedUse: string
   createdAt: string
   hazardCount: number
+  productCodes?: string[]
 }
 
 export default function ReportsPage() {
@@ -36,13 +37,26 @@ export default function ReportsPage() {
         const analyses = await analysisApi.fetchReportList()
         console.log('[Reports] Received analyses:', analyses)
         
-        const formattedReports: Report[] = analyses.map((analysis: any) => ({
-          id: analysis.analysis_id,
-          productName: analysis.device_name || 'Unknown Device',
-          intendedUse: analysis.intended_use || '',
-          createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          hazardCount: analysis.hazard_count || 0
-        }))
+        const formattedReports: Report[] = analyses.map((analysis: any) => {
+          // Extract product codes from product_codes field (could be string or array)
+          let productCodes: string[] = []
+          if (analysis.product_codes) {
+            if (typeof analysis.product_codes === 'string') {
+              productCodes = analysis.product_codes.split(',').map((code: string) => code.trim()).filter(Boolean)
+            } else if (Array.isArray(analysis.product_codes)) {
+              productCodes = analysis.product_codes
+            }
+          }
+          
+          return {
+            id: analysis.analysis_id,
+            productName: analysis.device_name || 'Unknown Device',
+            intendedUse: analysis.intended_use || '',
+            createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            hazardCount: analysis.hazard_count || 0,
+            productCodes: productCodes
+          }
+        })
         console.log('[Reports] Formatted reports:', formattedReports)
         setReports(formattedReports)
       } catch (error) {
@@ -57,12 +71,18 @@ export default function ReportsPage() {
   }, [user, authLoading])
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    })
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) {
+        return dateString // Return original if invalid
+      }
+      const month = (date.getMonth() + 1).toString().padStart(2, '0')
+      const day = date.getDate().toString().padStart(2, '0')
+      const year = date.getFullYear().toString().slice(-2)
+      return `${month}/${day}/${year}`
+    } catch (e) {
+      return dateString // Return original on error
+    }
   }
 
   const handleViewReport = (reportId: string) => {
@@ -73,7 +93,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <main className={styles.main}>
+    <main className={styles.main} style={{ flex: 1 }}>
       <Header showAuthButtons={!user || isAnonymous} showUserMenu={!!(user && !isAnonymous)} />
       <div className={styles.container}>
         <div className={styles.contentCard}>
@@ -107,12 +127,15 @@ export default function ReportsPage() {
                 <div key={report.id} className={styles.reportCard}>
                   <div className={styles.reportContent}>
                     <h3 className={styles.reportTitle}>{report.productName}</h3>
-                    <p className={styles.reportDescription}>{report.intendedUse}</p>
+                    {report.productCodes && report.productCodes.length > 0 && (
+                      <p className={styles.reportDescription}>
+                        {report.productCodes.join(', ')}
+                      </p>
+                    )}
                     <div className={styles.reportMeta}>
                       <span className={styles.metaItem}>
-                        {report.hazardCount} Hazards Identified
+                        {report.hazardCount} Hazards • {formatDate(report.createdAt)}
                       </span>
-                      <span className={styles.reportDate}>{formatDate(report.createdAt)}</span>
                     </div>
                   </div>
                   <div className={styles.reportActions}>

@@ -214,7 +214,7 @@ function SimilarProductsContent() {
   }
 
   return (
-    <main className={styles.main}>
+    <main className={styles.main} style={{ flex: 1 }}>
       <Header showAuthButtons={true} />
 
       <div className={styles.container}>

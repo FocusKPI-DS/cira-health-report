@@ -71,7 +71,9 @@ function GenerateContent() {
   const renderCompleted = () => (
     <div className={styles.message}>
       <div className={styles.messageHeader}>
-        <div className={styles.aiAvatar}>CA</div>
+        <div className={styles.aiAvatar}>
+          <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+        </div>
       </div>
       <div className={styles.messageContent}>
         <div className={styles.completedButtons}>
@@ -93,7 +95,7 @@ function GenerateContent() {
   )
 
   return (
-    <main className={styles.main}>
+    <main className={styles.main} style={{ flex: 1 }}>
       <Header showAuthButtons={true} showUserMenu={true} />
 
       <div className={styles.container}>

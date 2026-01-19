@@ -56,7 +56,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className={styles.main}>
+    <main className={styles.main} style={{ flex: 1 }}>
       <div className={styles.container}>
         <div className={styles.header}>
           <h1 className={styles.title}>
