@@ -5,19 +5,18 @@ import { Transaction } from '@/lib/types/stripe'
 // Initialize Stripe with secret key from environment variable
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '')
 
-interface ConfirmPaymentRequest {
+interface ReceiptRequest {
   paymentIntentId: string
 }
 
 /**
- * Confirm a payment after Payment Element submission
+ * Get receipt details including payment method for a specific transaction
  * 
- * POST /api/payments/confirm
- * Body: { paymentIntentId }
+ * GET /api/payments/receipt?paymentIntentId=pi_xxx
  * 
- * Returns: { success, paymentIntentId, transaction, receiptUrl }
+ * Returns: { success, transaction }
  */
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     // Check if Stripe is configured
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -27,8 +26,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body: ConfirmPaymentRequest = await request.json()
-    const { paymentIntentId } = body
+    const searchParams = request.nextUrl.searchParams
+    const paymentIntentId = searchParams.get('paymentIntentId')
 
     if (!paymentIntentId) {
       return NextResponse.json(
@@ -37,19 +36,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Retrieve the PaymentIntent to check its status
+    // Retrieve the PaymentIntent
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
-
-    // Check if payment was successful
-    if (paymentIntent.status !== 'succeeded') {
-      return NextResponse.json(
-        { 
-          error: `Payment not completed. Status: ${paymentIntent.status}`,
-          status: paymentIntent.status
-        },
-        { status: 400 }
-      )
-    }
 
     // Get the charge to retrieve receipt URL
     const charges = await stripe.charges.list({
@@ -61,7 +49,6 @@ export async function POST(request: NextRequest) {
     const receiptUrl = charge?.receipt_url || null
 
     // Extract receipt number from receipt URL
-    // Stripe receipt URLs format: https://pay.stripe.com/receipts/.../...
     let receiptNumber: string | undefined
     if (receiptUrl) {
       const receiptMatch = receiptUrl.match(/receipts\/([^\/]+)/)
@@ -90,7 +77,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (pmError) {
-        console.error('[Confirm Payment] Error fetching payment method:', pmError)
+        console.error('[Receipt] Error fetching payment method:', pmError)
         // Continue without payment method details
       }
     }
@@ -114,13 +101,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      paymentIntentId: paymentIntent.id,
       transaction: transaction,
-      receiptUrl: receiptUrl,
     })
 
   } catch (error: any) {
-    console.error('[Confirm Payment] Error:', error)
+    console.error('[Receipt] Error:', error)
     
     // Handle Stripe-specific errors
     if (error.type === 'StripeInvalidRequestError') {
@@ -132,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { 
-        error: 'Failed to confirm payment',
+        error: 'Failed to fetch receipt details',
         details: error.message 
       },
       { status: 500 }

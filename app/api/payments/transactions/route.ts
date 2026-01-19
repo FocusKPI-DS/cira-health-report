@@ -102,12 +102,20 @@ export async function GET(request: NextRequest) {
       const transactions: Transaction[] = []
       for (const pi of matchingIntents) {
         let receiptUrl = null
+        let receiptNumber: string | undefined
         try {
           const charges = await stripe.charges.list({
             payment_intent: pi.id,
             limit: 1,
           })
           receiptUrl = charges.data[0]?.receipt_url || null
+          // Extract receipt number from receipt URL
+          if (receiptUrl) {
+            const receiptMatch = receiptUrl.match(/receipts\/([^\/]+)/)
+            if (receiptMatch && receiptMatch[1]) {
+              receiptNumber = receiptMatch[1]
+            }
+          }
         } catch (error) {
           console.error('[Fetch Transactions] Error fetching charge:', error)
         }
@@ -127,6 +135,7 @@ export async function GET(request: NextRequest) {
           status: status,
           createdAt: new Date(pi.created * 1000).toISOString(),
           receiptUrl: receiptUrl,
+          receiptNumber: receiptNumber,
           reportId: pi.metadata?.report_id || undefined,
           analysisId: pi.metadata?.analysis_id || undefined,
           productName: pi.metadata?.product_name || undefined,
@@ -206,6 +215,15 @@ export async function GET(request: NextRequest) {
       .map((pi) => {
         const charge = chargeMap.get(pi.id)
         const receiptUrl = charge?.receipt_url || null
+        
+        // Extract receipt number from receipt URL
+        let receiptNumber: string | undefined
+        if (receiptUrl) {
+          const receiptMatch = receiptUrl.match(/receipts\/([^\/]+)/)
+          if (receiptMatch && receiptMatch[1]) {
+            receiptNumber = receiptMatch[1]
+          }
+        }
 
         // Map Stripe status to our Transaction status
         let status: Transaction['status'] = 'pending'
@@ -234,6 +252,7 @@ export async function GET(request: NextRequest) {
           status: status,
           createdAt: new Date(pi.created * 1000).toISOString(),
           receiptUrl: receiptUrl,
+          receiptNumber: receiptNumber,
           reportId: pi.metadata?.report_id || undefined,
           analysisId: pi.metadata?.analysis_id || undefined,
           productName: pi.metadata?.product_name || undefined,

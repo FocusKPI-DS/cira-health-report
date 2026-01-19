@@ -7,6 +7,7 @@ import styles from './PaymentModal.module.css'
 import { LockIcon, DownloadIcon } from './Icons'
 import { useAuth } from '@/lib/auth'
 import { Transaction } from '@/lib/types/stripe'
+import ReceiptModal from './ReceiptModal'
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
@@ -280,10 +281,12 @@ function PaymentForm({
 }
 
 // Transaction history component
-function TransactionHistory({ userId }: { userId: string }) {
+function TransactionHistory({ userId, purpose }: { userId: string; purpose?: PaymentPurpose }) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -398,21 +401,34 @@ function TransactionHistory({ userId }: { userId: string }) {
             </p>
           )}
 
-          {transaction.status === 'succeeded' && transaction.receiptUrl && (
+          {transaction.status === 'succeeded' && (
             <div className={styles.transactionActions}>
-              <a 
-                href={transaction.receiptUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.receiptLink}
+              <button
+                onClick={() => {
+                  setSelectedTransaction(transaction)
+                  setShowReceiptModal(true)
+                }}
+                className={styles.receiptButton}
               >
                 <DownloadIcon />
                 View Receipt
-              </a>
+              </button>
             </div>
           )}
         </div>
       ))}
+      
+      {showReceiptModal && selectedTransaction && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => {
+            setShowReceiptModal(false)
+            setSelectedTransaction(null)
+          }}
+          transaction={selectedTransaction}
+          purpose={purpose}
+        />
+      )}
     </div>
   )
 }
@@ -506,7 +522,7 @@ export default function PaymentModal({
               />
             ) : (
               user ? (
-                <TransactionHistory userId={user.uid} />
+                <TransactionHistory userId={user.uid} purpose={purpose} />
               ) : (
                 <div className={styles.errorMessage}>
                   Please log in to view transaction history
