@@ -128,9 +128,10 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
                     harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
                       let severityClass = styles.negligible
                       if (severityItem.severity === 'Minor') severityClass = styles.minor
-                      else if (severityItem.severity === 'Moderate') severityClass = styles.moderate
+                      else if (severityItem.severity === 'Negligible') severityClass = styles.negligible
+                      else if (severityItem.severity === 'Serious') severityClass = styles.serious
                       else if (severityItem.severity === 'Critical') severityClass = styles.critical
-                      else if (severityItem.severity === 'Major') severityClass = styles.moderate
+                      else if (severityItem.severity === 'Major') severityClass = styles.major
                       
                       rows.push(
                         <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
