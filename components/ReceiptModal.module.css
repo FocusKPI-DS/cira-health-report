@@ -101,28 +101,7 @@
   background: #94a3b8;
 }
 
-/* Company Section */
-.companySection {
-  margin-bottom: 2.5rem;
-  padding-bottom: 2rem;
-  border-bottom: 3px solid #e2e8f0;
-  text-align: center;
-}
-
-.companyName {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 1rem 0;
-  letter-spacing: -0.01em;
-}
-
-.companyAddress {
-  font-size: 0.95rem;
-  color: #64748b;
-  line-height: 1.8;
-  margin: 0;
-}
+/* Company Section - Removed from top, now in footer */
 
 /* Receipt Section */
 .receiptSection {
@@ -242,6 +221,27 @@
   color: #64748b;
   margin: 0 0 1rem 0;
   font-style: italic;
+}
+
+.companyInfo {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.companyInfo .companyName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: 0.01em;
+}
+
+.companyInfo .companyAddress {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .stripeLink {

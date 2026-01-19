@@ -110,16 +110,6 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
         </div>
 
         <div className={styles.content}>
-          {/* Company Information */}
-          <div className={styles.companySection}>
-            <h3 className={styles.companyName}>FocusKPI</h3>
-            <p className={styles.companyAddress}>
-              123 Business Street<br />
-              City, State 12345<br />
-              United States
-            </p>
-          </div>
-
           {/* Receipt Details */}
           <div className={styles.receiptSection}>
             <div className={styles.receiptRow}>
@@ -132,7 +122,7 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
             </div>
             <div className={styles.receiptRow}>
               <span className={styles.label}>Payment ID:</span>
-              <span className={styles.value}>{fullTransaction.paymentIntentId.slice(-12)}</span>
+              <span className={styles.value}>{fullTransaction.paymentIntentId}</span>
             </div>
           </div>
 
@@ -162,13 +152,15 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
           </div>
 
           {/* Product Information */}
-          {fullTransaction.productName && (
+          {(fullTransaction.productName || fullTransaction.analysisId) && (
             <div className={styles.productSection}>
               <h4 className={styles.sectionTitle}>Product Information</h4>
-              <div className={styles.receiptRow}>
-                <span className={styles.label}>Product Name:</span>
-                <span className={styles.value}>{fullTransaction.productName}</span>
-              </div>
+              {fullTransaction.productName && (
+                <div className={styles.receiptRow}>
+                  <span className={styles.label}>Product Name:</span>
+                  <span className={styles.value}>{fullTransaction.productName}</span>
+                </div>
+              )}
               {fullTransaction.analysisId && (
                 <div className={styles.receiptRow}>
                   <span className={styles.label}>Analysis ID:</span>
@@ -210,6 +202,12 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
                 View on Stripe
               </a>
             )}
+            <div className={styles.companyInfo}>
+              <p className={styles.companyName}>FocusKPI</p>
+              <p className={styles.companyAddress}>
+                123 Business Street, City, State 12345, United States
+              </p>
+            </div>
           </div>
         </div>
 
