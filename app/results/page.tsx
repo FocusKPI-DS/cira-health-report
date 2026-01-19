@@ -576,7 +576,16 @@ function ResultsContent() {
                   </button>
                   <button 
                     className={styles.addDatasourceButton}
-                    onClick={() => setShowAddDatasourceModal(true)}
+                    onClick={() => {
+                      // Track click add datasource event in GA4
+                      if (typeof window !== 'undefined' && window.gtag) {
+                        window.gtag('event', 'click_add_datasource', {
+                          page: 'results',
+                          analysis_id: analysisId || undefined
+                        })
+                      }
+                      setShowAddDatasourceModal(true)
+                    }}
                   >
                     Add Datasource
                   </button>

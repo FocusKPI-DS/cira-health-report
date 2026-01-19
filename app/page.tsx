@@ -100,7 +100,15 @@ export default function Home() {
             
             <button 
               className={styles.addDatasourceButton}
-              onClick={() => setShowAddDatasourceModal(true)}
+              onClick={() => {
+                // Track click add datasource event in GA4
+                if (typeof window !== 'undefined' && window.gtag) {
+                  window.gtag('event', 'click_add_datasource', {
+                    page: 'home'
+                  })
+                }
+                setShowAddDatasourceModal(true)
+              }}
             >
               Add Datasource
             </button>
