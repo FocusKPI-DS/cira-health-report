@@ -9,6 +9,7 @@ import { DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { Transaction } from '@/lib/types/stripe'
 import ReceiptModal from '@/components/ReceiptModal'
+import { trackEvent } from '@/lib/analytics'
 
 export default function InvoicesPage() {
   const router = useRouter()
@@ -153,6 +154,12 @@ export default function InvoicesPage() {
                   <div className={styles.invoiceActions}>
                     <button
                       onClick={() => {
+                        trackEvent('click_view_receipt', {
+                          transaction_id: transaction.id,
+                          payment_intent_id: transaction.paymentIntentId,
+                          amount: transaction.amount,
+                          product_name: transaction.productName || undefined
+                        })
                         setSelectedTransaction(transaction)
                         setShowReceiptModal(true)
                       }}
@@ -197,6 +204,10 @@ export default function InvoicesPage() {
         <ReceiptModal
           isOpen={showReceiptModal}
           onClose={() => {
+            trackEvent('close_receipt_modal', {
+              transaction_id: selectedTransaction.id,
+              payment_intent_id: selectedTransaction.paymentIntentId
+            })
             setShowReceiptModal(false)
             setSelectedTransaction(null)
           }}

@@ -8,6 +8,7 @@ import { LockIcon, DownloadIcon } from './Icons'
 import { useAuth } from '@/lib/auth'
 import { Transaction } from '@/lib/types/stripe'
 import ReceiptModal from './ReceiptModal'
+import { trackEvent } from '@/lib/analytics'
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
@@ -113,11 +114,25 @@ function PaymentFormInner({
         throw new Error('Failed to confirm payment')
       }
 
+      // Track payment success
+      trackEvent('payment_success', {
+        payment_intent_id: paymentIntent.id,
+        amount: paymentIntent.amount / 100,
+        product_name: productName || undefined
+      })
+
       // Success! Pass paymentIntentId to parent
       onSuccess(paymentIntent.id)
     } catch (err: any) {
-      setError(err.message || 'Payment processing failed')
+      const errorMessage = err.message || 'Payment processing failed'
+      setError(errorMessage)
       console.error('[Payment] Error:', err)
+      
+      // Track payment failure
+      trackEvent('payment_failed', {
+        error: errorMessage,
+        product_name: productName || undefined
+      })
     } finally {
       setIsProcessing(false)
     }
@@ -447,12 +462,30 @@ export default function PaymentModal({
   const [activeTab, setActiveTab] = useState<TabType>('payment')
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false)
 
+  // Track modal open on mount
+  useEffect(() => {
+    trackEvent('open_payment_modal', {
+      purpose,
+      analysis_id: analysisId || undefined,
+      product_name: productName || undefined,
+      amount
+    })
+  }, [])
+
   // Handle modal close - PaymentForm will handle canceling PaymentIntent if needed
   const handleClose = () => {
     // Prevent closing if payment is processing
     if (isPaymentProcessing) {
       return
     }
+    
+    // Track modal close
+    trackEvent('close_payment_modal', {
+      purpose,
+      analysis_id: analysisId || undefined,
+      product_name: productName || undefined
+    })
+    
     onClose()
   }
 

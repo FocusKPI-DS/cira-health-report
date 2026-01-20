@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import styles from './UserMenu.module.css'
 import { useAuth } from '@/lib/auth'
+import { trackEvent } from '@/lib/analytics'
 
 export default function UserMenu() {
   const router = useRouter()
@@ -29,6 +30,7 @@ export default function UserMenu() {
   }, [isOpen])
 
   const handleLogout = async () => {
+    trackEvent('click_logout')
     try {
       await logout()
       router.push('/')
@@ -64,7 +66,10 @@ export default function UserMenu() {
     <div className={styles.userMenu} ref={menuRef}>
       <button 
         className={styles.userAvatar}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          trackEvent('click_user_avatar')
+          setIsOpen(!isOpen)
+        }}
         aria-label="User menu"
       >
         {user?.photoURL ? (
@@ -82,14 +87,20 @@ export default function UserMenu() {
           <Link 
             href="/invoices" 
             className={styles.dropdownItem}
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              trackEvent('click_invoices')
+              setIsOpen(false)
+            }}
           >
             Invoices
           </Link>
           <Link 
             href="/results" 
             className={styles.dropdownItem}
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              trackEvent('click_results')
+              setIsOpen(false)
+            }}
           >
             Results
           </Link>

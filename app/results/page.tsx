@@ -12,6 +12,7 @@ import PaymentModal from '@/components/PaymentModal'
 import { InfoIcon, DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { analysisApi } from '@/lib/analysis-api'
+import { trackEvent } from '@/lib/analytics'
 
 // Google Analytics type declaration
 declare global {
@@ -400,13 +401,10 @@ function ResultsContent() {
   }, [report_list, isLoadingReports, analysisId, router])
 
   const handleViewReport = (report: Report) => {
-    // Track view report modal event in GA4
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'view_report_modal', {
-        analysis_id: report.id,
-        product_name: report.productName
-      })
-    }
+    trackEvent('view_report_modal', {
+      analysis_id: report.id,
+      product_name: report.productName
+    })
     
     router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
   }
@@ -556,13 +554,10 @@ function ResultsContent() {
   }
 
   const handleGenerateWholeReport = () => {
-    // Track generate whole report event in GA4
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'generate_whole_report', {
-        analysis_id: analysisId || undefined,
-        product_name: productName || undefined
-      })
-    }
+    trackEvent('re_click_generate_whole_report', {
+      analysis_id: analysisId || undefined,
+      product_name: productName || undefined
+    })
     
     handleRestartFullAnalysis()
   }
@@ -629,20 +624,23 @@ function ResultsContent() {
                 <div className={styles.buttonGroup}>
                   <button 
                     className={styles.generateButton}
-                    onClick={() => setShowGenerateModal(true)}
+                    onClick={() => {
+                      trackEvent('re_click_generate_new_report', {
+                        page: 'results',
+                        analysis_id: analysisId || undefined
+                      })
+                      setShowGenerateModal(true)
+                    }}
                   >
                     Generate New Report
                   </button>
                   <button 
                     className={styles.addDatasourceButton}
                     onClick={() => {
-                      // Track click add datasource event in GA4
-                      if (typeof window !== 'undefined' && window.gtag) {
-                        window.gtag('event', 'click_add_datasource', {
-                          page: 'results',
-                          analysis_id: analysisId || undefined
-                        })
-                      }
+                      trackEvent('re_click_add_datasource', {
+                        page: 'results',
+                        analysis_id: analysisId || undefined
+                      })
                       setShowAddDatasourceModal(true)
                     }}
                   >
@@ -664,7 +662,13 @@ function ResultsContent() {
                       <button
                         key={report.id}
                         className={`${styles.historyItem} ${analysisId === report.id ? styles.active : ''}`}
-                        onClick={() => handleViewReport(report)}
+                        onClick={() => {
+                          trackEvent('re_click_analysis_card', {
+                            analysis_id: report.id,
+                            product_name: report.productName
+                          })
+                          handleViewReport(report)
+                        }}
                       >
                         <div className={styles.historyItemHeader}>
                           <span className={styles.historyItemName}>{report.productName}</span>

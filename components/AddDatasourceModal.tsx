@@ -3,13 +3,7 @@
 import { useState, useEffect } from 'react'
 import styles from './AddDatasourceModal.module.css'
 import { getAuthHeaders } from '../lib/api-utils'
-
-// Google Analytics type declaration
-declare global {
-  interface Window {
-    gtag?: (command: string, ...args: any[]) => void
-  }
-}
+import { trackEvent } from '@/lib/analytics'
 
 interface AddDatasourceModalProps {
   isOpen: boolean
@@ -42,13 +36,10 @@ export default function AddDatasourceModal({ isOpen, onClose }: AddDatasourceMod
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Track save add datasource event in GA4
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'save_add_datasource', {
-        datasource: datasource.substring(0, 100), // Limit to 100 chars for GA4
-        has_reason: !!reason
-      })
-    }
+    trackEvent('save_add_datasource', {
+      datasource: datasource.substring(0, 100),
+      has_reason: !!reason
+    })
 
     try {
       // Get authentication headers
