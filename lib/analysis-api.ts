@@ -101,14 +101,16 @@ export const analysisApi = {
    * Start a new PHA analysis
    * @param productCodes Array of FDA product codes to analyze
    * @param similarProducts Array of complete similar product objects from FDA
+   * @param productName The user-entered product/device name
    * @param intendedUse Optional intended use description
    */
-  async startAnalysis(productCodes: string[], similarProducts: any[] = [], intendedUse?: string): Promise<StartAnalysisResponse> {
+  async startAnalysis(productCodes: string[], similarProducts: any[] = [], productName: string = '', intendedUse?: string): Promise<StartAnalysisResponse> {
     const headers = await getAuthHeaders()
     
     const requestBody = {
       product_codes: productCodes,
       similar_products: similarProducts,
+      product_name: productName,
       intended_use_snapshot: intendedUse || null
     }
     
@@ -217,6 +219,7 @@ export const analysisApi = {
    * Start analysis and poll for completion
    * @param productCodes Array of FDA product codes to analyze
    * @param similarProducts Array of complete similar product objects from FDA
+   * @param productName The user-entered product/device name
    * @param intendedUse Optional intended use description
    * @param onStatusUpdate Callback for status updates
    * @param pollInterval Polling interval in milliseconds (default: 5000)
@@ -225,12 +228,13 @@ export const analysisApi = {
   async startAnalysisAndPoll(
     productCodes: string[],
     similarProducts: any[] = [],
+    productName: string = '',
     intendedUse?: string,
     onStatusUpdate?: (status: AnalysisStatusResponse) => void,
     pollInterval: number = 5000
   ): Promise<AnalysisStatusResponse & { analysisId: string }> {
     // Start the analysis
-    const startResponse = await this.startAnalysis(productCodes, similarProducts, intendedUse)
+    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse)
     const analysisId = startResponse.analysis_id
 
     // Poll for status

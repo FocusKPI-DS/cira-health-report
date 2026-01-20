@@ -58,7 +58,13 @@ function GenerateContent() {
   
   const workflow = useGenerateWorkflow({
     initialProductName,
+    skipPaymentCheck: isFirstTimeUser === true, // Skip payment check for first-time users
+    onPaymentRequired: () => {
+      // Show payment modal when payment is required
+      setShowPaymentModal(true)
+    },
     onComplete: async (productName, intendedUse, hazards, analysisId) => {
+      console.log('[Generate] onComplete called with analysisId:', analysisId)
       setReportData(hazards)
       workflow.setCurrentStep('completed')
       

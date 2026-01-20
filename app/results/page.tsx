@@ -90,6 +90,7 @@ function ResultsContent() {
   const [severityLevel, setSeverityLevel] = useState('all')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const [pageInput, setPageInput] = useState('')
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const formatDate = (dateString: string) => {
@@ -167,6 +168,31 @@ function ResultsContent() {
 
     return () => clearTimeout(timer)
   }, [searchInput])
+
+  // Debounce page input to avoid jumping pages while typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (pageInput !== '') {
+        const page = Number(pageInput)
+        if (page >= 1 && page <= totalPages) {
+          setCurrentPage(page)
+        } else if (page < 1) {
+          setCurrentPage(1)
+          setPageInput('1')
+        } else if (page > totalPages) {
+          setCurrentPage(totalPages)
+          setPageInput(totalPages.toString())
+        }
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [pageInput, totalPages])
+
+  // Sync pageInput with currentPage when currentPage changes (e.g., via buttons)
+  useEffect(() => {
+    setPageInput(currentPage.toString())
+  }, [currentPage])
 
   useEffect(() => {
     const product = searchParams.get('productName') || ''
@@ -268,35 +294,36 @@ function ResultsContent() {
     }
   }, [analysisId, currentPage, pageSize, severityLevel, searchKeyword])
 
+  // Function to fetch report list
+  const fetchReportListData = async () => {
+    if (!user || authLoading) return
+    
+    setIsLoadingReports(true)
+    try {
+      console.log('[Results] Fetching report list...')
+      const analyses = await analysisApi.fetchReportList()
+      console.log('[Results] Received analyses:', analyses)
+      
+      const formattedReports: Report[] = analyses.map((analysis: any) => ({
+        id: analysis.analysis_id,
+        productName: analysis.device_name || 'Unknown Device',
+        intendedUse: analysis.intended_use || '',
+        createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        hazardCount: analysis.hazard_count || 0
+      }))
+      console.log('[Results] Formatted reports:', formattedReports)
+      setReport_list(formattedReports)
+    } catch (error) {
+      console.error('[Results] Error fetching report list:', error)
+      // Set empty list on error
+      setReport_list([])
+    } finally {
+      setIsLoadingReports(false)
+    }
+  }
+
   // Fetch report list from API when user is available
   useEffect(() => {
-    const fetchReportListData = async () => {
-      if (!user || authLoading) return
-      
-      setIsLoadingReports(true)
-      try {
-        console.log('[Results] Fetching report list...')
-        const analyses = await analysisApi.fetchReportList()
-        console.log('[Results] Received analyses:', analyses)
-        
-        const formattedReports: Report[] = analyses.map((analysis: any) => ({
-          id: analysis.analysis_id,
-          productName: analysis.device_name || 'Unknown Device',
-          intendedUse: analysis.intended_use || '',
-          createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          hazardCount: analysis.hazard_count || 0
-        }))
-        console.log('[Results] Formatted reports:', formattedReports)
-        setReport_list(formattedReports)
-      } catch (error) {
-        console.error('[Results] Error fetching report list:', error)
-        // Set empty list on error
-        setReport_list([])
-      } finally {
-        setIsLoadingReports(false)
-      }
-    }
-    
     fetchReportListData()
   }, [user, authLoading])
 
@@ -864,28 +891,82 @@ function ResultsContent() {
         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-              background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-              color: currentPage === 1 ? '#94a3b8' : 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            ← Previous
-          </button>
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage === 1 ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              ⟨⟨ First
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage === 1 ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              ← Previous
+            </button>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-              Page {currentPage} of {totalPages}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                Page
+              </span>
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={pageInput}
+                onChange={(e) => {
+                  setPageInput(e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const page = Number(pageInput)
+                    if (page >= 1 && page <= totalPages) {
+                      setCurrentPage(page)
+                    } else if (page < 1) {
+                      setCurrentPage(1)
+                      setPageInput('1')
+                    } else if (page > totalPages) {
+                      setCurrentPage(totalPages)
+                      setPageInput(totalPages.toString())
+                    }
+                  }
+                }}
+                style={{
+                  width: '60px',
+                  padding: '6px 8px',
+                  border: '1px solid rgba(14, 165, 233, 0.2)',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  textAlign: 'center'
+                }}
+              />
+              <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                of {totalPages}
+              </span>
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -915,24 +996,44 @@ function ResultsContent() {
             </div>
           </div>
           
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage >= totalPages}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-              background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-              color: currentPage >= totalPages ? '#94a3b8' : 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            Next →
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage >= totalPages}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              Next →
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              Last ⟩⟩
+            </button>
+          </div>
         </div>
               </>
             )}
@@ -972,32 +1073,15 @@ function ResultsContent() {
       <GenerateWorkflowModal
         isOpen={showGenerateModal}
         onClose={() => setShowGenerateModal(false)}
-        onComplete={(productName, intendedUse, hazards) => {
-          // Close modal
+        onStartSuccess={async (analysisId, productName, intendedUse) => {
+          // Close modal immediately
           setShowGenerateModal(false)
           
-          // Add new report to history
-          const newReport: Report = {
-            id: Date.now().toString(),
-            productName: productName,
-            intendedUse: intendedUse || '',
-            createdAt: new Date().toISOString().split('T')[0],
-            hazardCount: hazards.length
-          }
-          setReport_list(prev => [newReport, ...prev])
+          // Refresh report list to include the new report
+          await fetchReportListData()
           
-          // Set the report data
-          setProductName(productName)
-          setIntendedUse(intendedUse || '')
-          setCurrentHazards(hazards)
-          
-          // Show generating state
-          setIsGenerating(true)
-          
-          // After generating state, show the full report
-          setTimeout(() => {
-            setIsGenerating(false)
-          }, 3000)
+          // Navigate to results page with the new analysis_id
+          router.push(`/results?analysis_id=${encodeURIComponent(analysisId)}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse || '')}`)
         }}
       />
 

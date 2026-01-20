@@ -12,10 +12,11 @@ import { Hazard } from '@/lib/types'
 interface GenerateWorkflowModalProps {
   isOpen: boolean
   onClose: () => void
-  onComplete?: (productName: string, intendedUse: string, hazards: Hazard[]) => void
+  onComplete?: (productName: string, intendedUse: string, hazards: Hazard[], analysisId: string) => void
+  onStartSuccess?: (analysisId: string, productName: string, intendedUse: string) => void
 }
 
-export default function GenerateWorkflowModal({ isOpen, onClose, onComplete }: GenerateWorkflowModalProps) {
+export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onStartSuccess }: GenerateWorkflowModalProps) {
   const { user, loading: authLoading } = useAuth()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [isFirstTimeUser, setIsFirstTimeUser] = useState<boolean | null>(null)
@@ -64,9 +65,10 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete }: G
       }
       // Call original onComplete if provided
       if (onComplete) {
-        onComplete(productName, intendedUse, hazards)
+        onComplete(productName, intendedUse, hazards, analysisId)
       }
-    }
+    },
+    onStartSuccess: onStartSuccess // Pass through onStartSuccess to hook
   })
 
   // Check user payment status when modal opens

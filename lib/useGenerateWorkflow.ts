@@ -87,13 +87,14 @@ const mockSimilarProducts: SimilarProduct[] = [
 
 interface UseGenerateWorkflowOptions {
   initialProductName?: string
-  onComplete?: (productName: string, intendedUse: string, hazards: Hazard[], analysisId?: string) => void
+  onComplete?: (productName: string, intendedUse: string, hazards: Hazard[], analysisId: string) => void
+  onStartSuccess?: (analysisId: string, productName: string, intendedUse: string) => void // Called immediately after start-analysis succeeds
   onPaymentRequired?: () => void
   skipPaymentCheck?: boolean // For first-time users who can generate without payment
 }
 
 export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
-  const { initialProductName = '', onComplete, onPaymentRequired, skipPaymentCheck = false } = options
+  const { initialProductName = '', onComplete, onStartSuccess, onPaymentRequired, skipPaymentCheck = false } = options
 
   const [productName, setProductName] = useState(initialProductName)
   const [intendedUse, setIntendedUse] = useState('')
@@ -372,6 +373,29 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       source: product.source || 'FDA'
     }))
     
+    // If onStartSuccess is provided (results page), call the API without UI updates
+    // The parent component will handle modal closing and navigation
+    if (onStartSuccess) {
+      try {
+        // Call start-analysis API without polling
+        const startResult = await analysisApi.startAnalysis(
+          selectedProductCodes,
+          similarProductsForBackend,
+          productName,
+          intendedUse || undefined
+        )
+        
+        // Call onStartSuccess immediately with the returned analysis_id
+        onStartSuccess(startResult.analysis_id, productName, intendedUse)
+        return
+      } catch (error) {
+        console.error('[Analysis] Error starting analysis:', error)
+        alert('Failed to start analysis. Please try again.')
+        return
+      }
+    }
+    
+    // For generate page (no onStartSuccess), show UI updates and poll
     setCurrentStep('generating')
     addMessage('ai', 'Generating your PHA Analysis report... This may take a few moments.', 'generating')
 
@@ -394,10 +418,12 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     }, 1000)
 
     try {
+      
       // Call the backend API and poll for status
       const result = await analysisApi.startAnalysisAndPoll(
         selectedProductCodes, // Pass selected product codes
         similarProductsForBackend, // Pass complete similar products data
+        productName, // Pass the user-entered product name
         intendedUse || undefined, // Pass intended use
         (status: AnalysisStatusResponse) => {
           // Update message with status
@@ -421,8 +447,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         addMessage('ai', 'Your PHA Analysis has been completed! Click "View Report" to see the results.', 'completed')
         setCurrentStep('completed')
         
-        // Notify parent with empty hazards - they'll be fetched when View Report is clicked
-        // Pass analysisId to onComplete so parent can update payment metadata
+        // Notify parent with empty hazards and analysisId - they'll be fetched when View Report is clicked
         if (onComplete) {
           onComplete(productName, intendedUse, [], result.analysisId)
         }

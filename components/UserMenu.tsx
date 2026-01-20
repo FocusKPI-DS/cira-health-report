@@ -86,6 +86,13 @@ export default function UserMenu() {
           >
             Invoices
           </Link>
+          <Link 
+            href="/results" 
+            className={styles.dropdownItem}
+            onClick={() => setIsOpen(false)}
+          >
+            Results
+          </Link>
           <button 
             className={styles.dropdownItem}
             onClick={handleLogout}
