@@ -102,7 +102,7 @@
 }
 
 .hero {
-  min-height: 100vh;
+  min-height: 85vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,7 +197,7 @@
   gap: 0.75rem;
   background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
   color: white;
-  font-size: 2rem;
+  font-size: 1rem;
   font-weight: 600;
   padding: 1.125rem 2rem;
   border: none;
@@ -221,7 +221,7 @@
 }
 
 .arrow {
-  font-size: 1.25rem;
+  font-size: 0.9rem;
   transition: transform 0.3s ease;
   line-height: 1;
   display: inline-flex;
@@ -465,22 +465,307 @@
   font-weight: 500;
 }
 
-.ctaButton {
-  display: inline-block;
-  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
-  color: white;
-  font-size: 1.25rem;
-  font-weight: 600;
-  padding: 0.625rem 1.5rem;
-  border-radius: 6px;
-  text-decoration: none;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+.faqSection {
+  padding: 4rem 2rem;
+  background: white;
+  position: relative;
+  z-index: 1;
 }
 
-.ctaButton:hover {
+.faqContainer {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.faqTitle {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.faqDescription {
+  font-size: 1.125rem;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.faqList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.faqItem {
+  background: white;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.05);
+}
+
+.faqItem:hover {
+  border-color: rgba(14, 165, 233, 0.4);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+}
+
+.faqQuestion {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s ease;
+}
+
+.faqQuestion:hover {
+  color: #0ea5e9;
+}
+
+.faqIcon {
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: #0ea5e9;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.faqQuestion:hover .faqIcon {
+  background: rgba(14, 165, 233, 0.2);
+  transform: scale(1.1);
+}
+
+.faqAnswer {
+  padding: 0 1.5rem 1.25rem 1.5rem;
+  color: #64748b;
+  font-size: 1rem;
+  line-height: 1.7;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.contactSection {
+  padding: 4rem 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #d1fae5 100%);
+  position: relative;
+  z-index: 1;
+}
+
+.contactContainer {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.contactTitle {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.contactDescription {
+  font-size: 1.125rem;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.contactEmail {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 1rem;
+  color: #64748b;
+}
+
+.contactEmailLabel {
+  font-weight: 600;
+  color: #1e293b;
+  margin-right: 0.5rem;
+}
+
+.contactEmailLink {
+  color: #0ea5e9;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.contactEmailLink:hover {
+  color: #10b981;
+  text-decoration: underline;
+}
+
+.contactContent {
+  display: flex;
+  justify-content: center;
+}
+
+.contactInfo {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.contactInfoTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1rem;
+}
+
+.contactInfoText {
+  font-size: 1rem;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.contactDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.contactDetailItem {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.contactDetailIcon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.contactDetailLabel {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+
+.contactDetailValue {
+  font-size: 1rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.contactForm {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  max-width: 600px;
+  width: 100%;
+}
+
+.formGroup {
+  margin-bottom: 1.5rem;
+}
+
+.formLabel {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.formInput,
+.formTextarea {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 2px solid rgba(14, 165, 233, 0.2);
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #1e293b;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.formInput:focus,
+.formTextarea:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+}
+
+.formTextarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.contactSubmitButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.contactSubmitButton:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+}
+
+.contactSubmitButton .arrow {
+  font-size: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.contactSubmitButton:hover .arrow {
+  transform: translateX(4px);
 }
 
 @media (max-width: 768px) {
@@ -635,6 +920,51 @@
     padding: 0.625rem 1.75rem;
     width: 100%;
     text-align: center;
+  }
+
+  .faqSection {
+    padding: 3rem 1.5rem;
+  }
+
+  .faqTitle {
+    font-size: 2rem;
+  }
+
+  .faqDescription {
+    font-size: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .faqQuestion {
+    font-size: 1rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .faqAnswer {
+    padding: 0 1.25rem 1rem 1.25rem;
+    font-size: 0.9rem;
+  }
+
+  .contactSection {
+    padding: 3rem 1.5rem;
+  }
+
+  .contactTitle {
+    font-size: 2rem;
+  }
+
+  .contactDescription {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .contactEmail {
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .contactForm {
+    padding: 1.5rem;
   }
 }
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
+import Footer from '@/components/Footer'
 
 export const metadata: Metadata = {
   title: 'First PHA Analysis Draft under 30 minutes',
@@ -35,7 +36,10 @@ export default function RootLayout({
       </head>
       <body>
         <AuthProvider>
-          {children}
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            {children}
+            <Footer />
+          </div>
         </AuthProvider>
       </body>
     </html>

@@ -72,10 +72,13 @@ export default function GenerateWorkflowContent({
       {/* Render message history */}
       {messageHistory.map((message) => (
         <div key={message.id} className={styles.message}>
-          <div className={styles.messageHeader}>
-            {message.type === 'ai' && <div className={styles.aiAvatar}>CA</div>}
-            {message.type === 'user' && <div className={styles.userAvatar}>Y</div>}
-          </div>
+          {message.type === 'ai' && (
+            <div className={styles.messageHeader}>
+              <div className={styles.aiAvatar}>
+                <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+              </div>
+            </div>
+          )}
           <div className={`${styles.messageContent} ${message.type === 'user' ? styles.userMessage : ''}`}>
             {renderMessageContent(message)}
           </div>
@@ -86,7 +89,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'device-name' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleDeviceNameSubmit} className={styles.inlineForm}>
@@ -111,7 +116,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'intended-use-question' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <p>Do you have a more detailed intended use for this device?</p>
@@ -137,7 +144,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'intended-use-input' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleIntendedUseSubmit} className={styles.inlineForm}>
@@ -161,7 +170,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'searching-products' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <div className={styles.loading}>⏳</div>
@@ -173,7 +184,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'no-products-found' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleRetrySearch} className={styles.inlineForm}>
@@ -198,7 +211,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'similar-products' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleNewSearch} className={styles.searchAgainForm}>
@@ -272,7 +287,9 @@ export default function GenerateWorkflowContent({
       {currentStep === 'generating' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>CA</div>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
           </div>
           <div className={styles.messageContent}>
             <div className={styles.loading}>

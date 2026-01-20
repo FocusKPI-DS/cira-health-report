@@ -1,0 +1,142 @@
+.main {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #d1fae5 100%);
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 6rem 2rem 4rem 2rem;
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 1rem;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.meta {
+  text-align: center;
+  margin-bottom: 2rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.meta p {
+  margin: 0.25rem 0;
+}
+
+.content {
+  background: white;
+  padding: 3rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.intro {
+  font-size: 1rem;
+  color: #1e293b;
+  line-height: 1.8;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+.section {
+  margin-bottom: 2.5rem;
+}
+
+.section:last-of-type {
+  margin-bottom: 0;
+}
+
+.sectionTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1rem;
+  margin-top: 2rem;
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sectionTitle:first-of-type {
+  margin-top: 0;
+}
+
+.subsectionTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.section p {
+  font-size: 1rem;
+  color: #64748b;
+  line-height: 1.8;
+  margin-bottom: 1rem;
+}
+
+.section ul {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+  color: #64748b;
+}
+
+.section li {
+  font-size: 1rem;
+  line-height: 1.8;
+  margin-bottom: 0.5rem;
+}
+
+.important {
+  background: rgba(14, 165, 233, 0.1);
+  border-left: 4px solid #0ea5e9;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 4px;
+}
+
+.legal {
+  font-weight: 600;
+  color: #1e293b;
+  margin: 1rem 0;
+}
+
+.lastUpdated {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-style: italic;
+  text-align: center;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 5rem 1.5rem 3rem 1.5rem;
+  }
+
+  .title {
+    font-size: 2rem;
+  }
+
+  .content {
+    padding: 2rem 1.5rem;
+  }
+
+  .sectionTitle {
+    font-size: 1.25rem;
+  }
+
+  .section p {
+    font-size: 0.95rem;
+  }
+}
