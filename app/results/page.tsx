@@ -431,13 +431,13 @@ function ResultsContent() {
 
   const handlePaymentSuccess = async (paymentIntentId?: string) => {
     setShowPaymentModal(false)
-    // After payment, check and download
-    // Note: For download payments, we don't need to update metadata since analysis already exists
-    await checkPaymentAndDownload()
+    // After payment, proceed with generating the whole report
+    console.log('[Results] Payment successful, starting report generation')
+    handleRestartFullAnalysis()
   }
 
-  const checkPaymentAndDownload = async () => {
-    console.log('[Results] ===== CHECKING PAYMENT FOR DOWNLOAD =====')
+  const checkPaymentForGeneration = async () => {
+    console.log('[Results] ===== CHECKING PAYMENT FOR GENERATION =====')
     console.log('[Results] Analysis ID:', analysisId)
     console.log('[Results] User ID:', user?.uid)
     
@@ -451,7 +451,7 @@ function ResultsContent() {
       console.log('[Results] Step 1: Querying payments by analysisId...')
       console.log('[Results] API URL: /api/payments/transactions?analysisId=' + encodeURIComponent(analysisId))
       
-      // First, check if this specific analysis has been paid for
+      // Check if this specific analysis has been paid for
       const analysisResponse = await fetch(`/api/payments/transactions?analysisId=${encodeURIComponent(analysisId)}`)
       
       console.log('[Results] Response status:', analysisResponse.status, analysisResponse.statusText)
@@ -472,8 +472,6 @@ function ResultsContent() {
         console.log('[Results] ✅ CONDITION MET: Payment found for this analysis')
         console.log('[Results] Payment details:', analysisPayments[0])
         console.log('[Results] Payment analysisId in metadata:', analysisPayments[0].analysisId)
-        console.log('[Results] Proceeding with download...')
-        await performDownload()
         return true
       }
 
@@ -484,9 +482,7 @@ function ResultsContent() {
         console.log(`[Results]   Transaction ${index + 1}: analysisId = "${t.analysisId}", status = "${t.status}"`)
       })
 
-      // If no payment for this analysis, require payment for download
-      // This is a safety check - they should have paid before generation, but if they bypassed that,
-      // they need to pay now to download
+      // If no payment for this analysis, require payment before generation
       console.log('[Results] ===== FINAL DECISION: PAYMENT REQUIRED =====')
       console.log('[Results] Reason: No successful payment found with metadata.analysis_id matching:', analysisId)
       return false
@@ -539,27 +535,33 @@ function ResultsContent() {
         return
       }
       
-      // Check if payment has been made for this analysis
-      const hasPaid = await checkPaymentAndDownload()
-      
-      if (!hasPaid) {
-        // No payment found, show payment modal
-        console.log('[Results] Payment required, showing payment modal')
-        setShowPaymentModal(true)
-      }
+      // Directly download without payment check
+      console.log('[Results] Proceeding with download')
+      await performDownload()
     } catch (error) {
       console.error('[Results] Error in download flow:', error)
       alert('Failed to process download. Please try again.')
     }
   }
 
-  const handleGenerateWholeReport = () => {
+  const handleGenerateWholeReport = async () => {
     trackEvent('re_click_generate_whole_report', {
       analysis_id: analysisId || undefined,
       product_name: productName || undefined
     })
     
-    handleRestartFullAnalysis()
+    // Check if payment has been made for this analysis before generating
+    const hasPaid = await checkPaymentForGeneration()
+    
+    if (hasPaid) {
+      // Payment found, proceed with generation
+      console.log('[Results] Payment verified, proceeding with generation')
+      handleRestartFullAnalysis()
+    } else {
+      // No payment found, show payment modal
+      console.log('[Results] Payment required for generation, showing payment modal')
+      setShowPaymentModal(true)
+    }
   }
 
   const handleRestartFullAnalysis = async () => {
@@ -889,22 +891,23 @@ function ResultsContent() {
         </div>
         
         {/* Pagination Controls */}
-        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'nowrap', gap: '8px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
             <button
               onClick={() => setCurrentPage(1)}
               disabled={currentPage === 1}
               style={{
-                padding: '8px 16px',
+                padding: '6px 10px',
                 backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 color: currentPage === 1 ? '#94a3b8' : 'white',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '600',
                 cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap'
               }}
             >
               ⟨⟨ First
@@ -913,25 +916,26 @@ function ResultsContent() {
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
               style={{
-                padding: '8px 16px',
+                padding: '6px 10px',
                 backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 color: currentPage === 1 ? '#94a3b8' : 'white',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '600',
                 cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap'
               }}
             >
-              ← Previous
+              ← Prev
             </button>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 1 auto', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
                 Page
               </span>
               <input
@@ -957,22 +961,22 @@ function ResultsContent() {
                   }
                 }}
                 style={{
-                  width: '60px',
-                  padding: '6px 8px',
+                  width: '50px',
+                  padding: '4px 6px',
                   border: '1px solid rgba(14, 165, 233, 0.2)',
                   borderRadius: '6px',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   textAlign: 'center'
                 }}
               />
-              <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                of {totalPages}
+              <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                / {totalPages}
               </span>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                Hazards per page:
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                Per page:
               </label>
               <select
                 value={pageSize}
@@ -981,10 +985,10 @@ function ResultsContent() {
                   setCurrentPage(1)
                 }}
                 style={{
-                  padding: '6px 10px',
+                  padding: '4px 6px',
                   border: '1px solid rgba(14, 165, 233, 0.2)',
                   borderRadius: '6px',
-                  fontSize: '14px',
+                  fontSize: '13px',
                   backgroundColor: 'white',
                   cursor: 'pointer'
                 }}
@@ -997,21 +1001,22 @@ function ResultsContent() {
             </div>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage >= totalPages}
               style={{
-                padding: '8px 16px',
+                padding: '6px 10px',
                 backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 color: currentPage >= totalPages ? '#94a3b8' : 'white',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '600',
                 cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap'
               }}
             >
               Next →
@@ -1020,16 +1025,17 @@ function ResultsContent() {
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage >= totalPages}
               style={{
-                padding: '8px 16px',
+                padding: '6px 10px',
                 backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
                 color: currentPage >= totalPages ? '#94a3b8' : 'white',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '600',
                 cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap'
               }}
             >
               Last ⟩⟩

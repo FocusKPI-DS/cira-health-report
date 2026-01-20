@@ -511,7 +511,7 @@ export default function PaymentModal({
         
         <div className={styles.modalHeader}>
           <h2 className={styles.title}>
-            {purpose === 'generation' ? 'Generate Analysis' : 'Download Full Report'}
+            {purpose === 'generation' ? 'Generate Analysis' : 'Generate Full Report'}
           </h2>
           <p className={styles.subtitle}>
             {purpose === 'generation' 
