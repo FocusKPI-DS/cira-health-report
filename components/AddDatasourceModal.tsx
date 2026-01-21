@@ -86,7 +86,10 @@ export default function AddDatasourceModal({ isOpen, onClose }: AddDatasourceMod
   return (
     <div className={styles.overlay} onClick={handleClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.closeButton} onClick={handleClose}>
+        <button className={styles.closeButton} onClick={() => {
+          trackEvent('close_add_datasource_modal', {})
+          handleClose()
+        }}>
           ×
         </button>
         
@@ -143,7 +146,10 @@ export default function AddDatasourceModal({ isOpen, onClose }: AddDatasourceMod
                 <button 
                   type="button" 
                   className={styles.cancelButton} 
-                  onClick={handleClose}
+                  onClick={() => {
+                    trackEvent('cancel_add_datasource', {})
+                    handleClose()
+                  }}
                   disabled={isSubmitting}
                 >
                   Cancel

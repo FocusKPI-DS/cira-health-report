@@ -630,7 +630,13 @@ function ResultsContent() {
               <h2 className={styles.sidebarTitle}>Report History</h2>
               <button 
                 className={styles.sidebarToggle}
-                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                onClick={() => {
+                  trackEvent('re_toggle_sidebar', {
+                    action: isSidebarExpanded ? 'collapse' : 'expand',
+                    page: 'results'
+                  })
+                  setIsSidebarExpanded(!isSidebarExpanded)
+                }}
                 aria-label={isSidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
               >
                 {isSidebarExpanded ? '←' : '→'}
@@ -679,13 +685,7 @@ function ResultsContent() {
                       <button
                         key={report.id}
                         className={`${styles.historyItem} ${analysisId === report.id ? styles.active : ''}`}
-                        onClick={() => {
-                          trackEvent('re_click_analysis_card', {
-                            analysis_id: report.id,
-                            product_name: report.productName
-                          })
-                          handleViewReport(report)
-                        }}
+                        onClick={() => handleViewReport(report)}
                       >
                         <div className={styles.historyItemHeader}>
                           <span className={styles.historyItemName}>{report.productName}</span>
@@ -728,7 +728,13 @@ function ResultsContent() {
                 </button>
               )}
               {user && !automaticSettingsEnabled && (
-                <button className={styles.downloadButton} onClick={handleDownload}>
+                <button className={styles.downloadButton} onClick={() => {
+                  trackEvent('re_click_download_full_report', {
+                    analysis_id: analysisId || undefined,
+                    product_name: productName || undefined
+                  })
+                  handleDownload()
+                }}>
                   <DownloadIcon />
                   Download Full Report
                 </button>
@@ -805,8 +811,12 @@ function ResultsContent() {
                     <select
                       value={severityLevel}
                       onChange={(e) => {
+                        trackEvent('re_filter_severity', {
+                          severity: e.target.value,
+                          analysis_id: analysisId || undefined
+                        })
                         setSeverityLevel(e.target.value)
-                        setCurrentPage(1) // Reset to first page on filter change
+                        setCurrentPage(1)
                       }}
                       style={{
                         width: '100%',
@@ -894,7 +904,14 @@ function ResultsContent() {
                           <button 
                             className={styles.infoButton} 
                             title="Detail"
-                            onClick={() => handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)}
+                            onClick={() => {
+                              trackEvent('re_click_hazard_detail', {
+                                analysis_id: analysisId || undefined,
+                                hazard: hazard.hazard,
+                                severity: severityItem.severity
+                              })
+                              handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)
+                            }}
                           >
                             <InfoIcon />
                           </button>
@@ -917,7 +934,14 @@ function ResultsContent() {
         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'nowrap', gap: '8px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
             <button
-              onClick={() => setCurrentPage(1)}
+              onClick={() => {
+                trackEvent('re_pagination_first', {
+                  analysis_id: analysisId || undefined,
+                  current_page: currentPage,
+                  total_pages: totalPages
+                })
+                setCurrentPage(1)
+              }}
               disabled={currentPage === 1}
               style={{
                 padding: '6px 10px',
@@ -1070,7 +1094,13 @@ function ResultsContent() {
 
         {(!user || isAnonymous) && hazards.length > 0 && (
           <div className={styles.footer}>
-            <button className={styles.viewMoreButton} onClick={handleViewMore}>
+            <button className={styles.viewMoreButton} onClick={() => {
+              trackEvent('re_click_view_more', {
+                analysis_id: analysisId || undefined,
+                product_name: productName || undefined
+              })
+              handleViewMore()
+            }}>
               View More
             </button>
           </div>

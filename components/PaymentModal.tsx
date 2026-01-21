@@ -411,7 +411,15 @@ function PaymentForm({
             className={styles.couponInput}
             placeholder="Enter coupon code (Optional)"
             value={couponCode}
-            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+            onChange={(e) => {
+              const newCode = e.target.value.toUpperCase()
+              setCouponCode(newCode)
+              if (newCode.length >= 3) {
+                trackEvent('enter_coupon_code', {
+                  analysis_id: analysisId || reportId || undefined
+                })
+              }
+            }}
             disabled={isInitializing}
           />
           <p className={styles.couponHint}>
@@ -435,7 +443,13 @@ function PaymentForm({
         <button
           type="button"
           className={styles.initButton}
-          onClick={handleInitializePayment}
+          onClick={() => {
+            trackEvent('click_proceed_to_payment', {
+              has_coupon: !!couponCode,
+              analysis_id: analysisId || reportId || undefined
+            })
+            handleInitializePayment()
+          }}
           disabled={isInitializing || !user}
         >
           {isInitializing ? (
@@ -800,13 +814,25 @@ export default function PaymentModal({
           <div className={styles.tabs}>
             <button
               className={`${styles.tab} ${activeTab === 'payment' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('payment')}
+              onClick={() => {
+                trackEvent('switch_payment_tab', {
+                  tab: 'payment',
+                  analysis_id: analysisId || undefined
+                })
+                setActiveTab('payment')
+              }}
             >
               Payment
             </button>
             <button
               className={`${styles.tab} ${activeTab === 'history' ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab('history')}
+              onClick={() => {
+                trackEvent('switch_payment_tab', {
+                  tab: 'history',
+                  analysis_id: analysisId || undefined
+                })
+                setActiveTab('history')
+              }}
             >
               Transaction History
             </button>

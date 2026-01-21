@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import styles from './PHADetailsModal.module.css'
 import { ExternalLinkIcon } from '@/components/Icons'
 import { analysisApi } from '@/lib/analysis-api'
+import { trackEvent } from '@/lib/analytics'
 
 interface HazardousSituation {
   id: number
@@ -73,7 +74,14 @@ export default function PHADetailsModal({ isOpen, onClose, analysisId, hazard, p
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2 className={styles.title}>PHA Analysis Details</h2>
-          <button className={styles.closeButton} onClick={onClose}>
+          <button className={styles.closeButton} onClick={() => {
+            trackEvent('close_pha_details_modal', {
+              analysis_id: analysisId || undefined,
+              hazard: hazard,
+              severity: severity
+            })
+            onClose()
+          }}>
             ×
           </button>
         </div>
@@ -129,6 +137,14 @@ export default function PHADetailsModal({ isOpen, onClose, analysisId, hazard, p
                         rel="noopener noreferrer"
                         className={styles.referenceButton}
                         title="View Source"
+                        onClick={() => {
+                          trackEvent('click_hazard_source_link', {
+                            analysis_id: analysisId || undefined,
+                            hazard: hazard,
+                            severity: severity,
+                            source: situation.source
+                          })
+                        }}
                       >
                         <ExternalLinkIcon />
                       </a>
