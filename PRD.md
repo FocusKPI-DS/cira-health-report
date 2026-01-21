@@ -24,7 +24,7 @@
 
 ## Executive Summary
 
-Cira Health is a SaaS platform that generates Process Hazard Analysis (PHA) reports for medical devices using AI-powered insights and FDA database integration. The platform allows users to input device information, search for similar products, and generate comprehensive hazard analysis reports.
+Cira Health is a SaaS platform that generates Preliminary Hazard Analysis (PHA) reports for medical devices using AI-powered insights and FDA database integration. The platform allows users to input device information, search for similar products, and generate comprehensive hazard analysis reports.
 
 ---
 

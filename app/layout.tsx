@@ -6,7 +6,7 @@ import Footer from '@/components/Footer'
 
 export const metadata: Metadata = {
   title: 'First PHA Analysis Draft under 30 minutes',
-  description: 'Generate your Process Hazard Analysis quickly and efficiently',
+  description: 'Generate your Preliminary Hazard Analysis quickly and efficiently',
   icons: {
     icon: '/favicon.ico',
   },

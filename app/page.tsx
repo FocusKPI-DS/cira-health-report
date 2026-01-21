@@ -45,7 +45,7 @@ export default function Home() {
             <span className={styles.highlight}>In 30 Seconds </span>
           </h1>
           <p className={styles.subtitle}>
-            Streamline your Process Hazard Analysis with AI-powered insights.<br />
+            Streamline your Preliminary Hazard Analysis with AI-powered insights.<br />
             Generate comprehensive reports quickly and efficiently.
           </p>
           <form onSubmit={handleSubmit} className={styles.ctaForm}>
@@ -170,12 +170,12 @@ export default function Home() {
                 className={styles.faqQuestion}
                 onClick={() => setOpenFaqIndex(openFaqIndex === 0 ? null : 0)}
               >
-                <span>What is a Process Hazard Analysis (PHA)?</span>
+                <span>What is a Preliminary Hazard Analysis (PHA)?</span>
                 <span className={styles.faqIcon}>{openFaqIndex === 0 ? '−' : '+'}</span>
               </button>
               {openFaqIndex === 0 && (
                 <div className={styles.faqAnswer}>
-                  A Process Hazard Analysis (PHA) is a systematic evaluation of potential hazards associated with industrial processes. It helps identify and assess risks, ensuring compliance with safety regulations and FDA requirements for medical devices.
+                  A Preliminary Hazard Analysis (PHA) is a systematic evaluation of potential hazards associated with industrial processes. It helps identify and assess risks, ensuring compliance with safety regulations and FDA requirements for medical devices.
                 </div>
               )}
             </div>

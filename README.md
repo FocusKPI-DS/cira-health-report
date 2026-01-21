@@ -1,6 +1,6 @@
 # PHA Analysis Generator
 
-A Next.js application for generating Process Hazard Analysis (PHA) reports quickly and efficiently.
+A Next.js application for generating Preliminary Hazard Analysis (PHA) reports quickly and efficiently.
 
 ## Features
 
