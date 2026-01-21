@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
 import ReportModal from '@/components/ReportModal'
-import PaymentModal from '@/components/PaymentModal'
 import GenerateWorkflowContent from '@/components/GenerateWorkflowContent'
 import { useGenerateWorkflow } from '@/lib/useGenerateWorkflow'
-import { getUserPaymentStatus } from '@/lib/payment-utils'
 import { useAuth } from '@/lib/auth'
 import { Hazard } from '@/lib/types'
 import { trackEvent } from '@/lib/analytics'
@@ -18,127 +16,28 @@ function GenerateContent() {
   const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAuth()
   const [showReportModal, setShowReportModal] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [reportData, setReportData] = useState<Hazard[]>([])
-  const [isFirstTimeUser, setIsFirstTimeUser] = useState<boolean | null>(null)
-  const [isCheckingUserStatus, setIsCheckingUserStatus] = useState(true)
-  const paymentIntentIdRef = useRef<string | null>(null) // Use ref to persist paymentIntentId across renders
 
   const initialProductName = searchParams.get('productName') || ''
   
-  // Check user payment status on mount
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      if (authLoading || !user) {
-        setIsCheckingUserStatus(false)
-        return
-      }
-
-      try {
-        const status = await getUserPaymentStatus(user.uid)
-        setIsFirstTimeUser(status.isFirstTimeUser)
-        console.log('[Generate] User status:', status)
-      } catch (error) {
-        console.error('[Generate] Error checking user status:', error)
-        // Default to first-time user on error
-        setIsFirstTimeUser(true)
-      } finally {
-        setIsCheckingUserStatus(false)
-      }
-    }
-
-    checkUserStatus()
-  }, [user, authLoading])
-  
   const workflow = useGenerateWorkflow({
     initialProductName,
-    skipPaymentCheck: isFirstTimeUser === true, // Skip payment check for first-time users
+    skipPaymentCheck: true, // Generate page is always free - no payment required
     onPaymentRequired: () => {
-      // Show payment modal when payment is required
-      setShowPaymentModal(true)
+      // This should not be called on Generate page
+      console.warn('[Generate] onPaymentRequired called unexpectedly - Generate page should be free')
     },
     onComplete: async (productName, intendedUse, hazards, analysisId) => {
-      console.log('[Generate] onComplete called with analysisId:', analysisId)
+      console.log('[Generate] Analysis generation completed:', analysisId)
       setReportData(hazards)
       workflow.setCurrentStep('completed')
-      
-      // Log when onComplete is called
-      console.log('[Generate] ===== onComplete CALLED =====')
-      console.log('[Generate] onComplete received analysisId:', analysisId)
-      console.log('[Generate] Current paymentIntentId in ref:', paymentIntentIdRef.current)
-      
-      // Update payment intent metadata with actual analysis_id if payment was made before generation
-      if (analysisId && paymentIntentIdRef.current) {
-        await updatePaymentMetadata(analysisId, paymentIntentIdRef.current)
-      } else if (paymentIntentIdRef.current) {
-        console.warn('[Generate] onComplete: paymentIntentId exists but analysisId is missing. Cannot update metadata.')
-      } else {
-        console.log('[Generate] onComplete: No paymentIntentId, skipping metadata update.')
-      }
     }
   })
 
-  // Override handleGenerateReport to check payment status
+  // Generate Report button handler - always free, no payment required
   const handleGenerateReportWithPaymentCheck = async () => {
-    console.log('[Generate] ===== handleGenerateReportWithPaymentCheck CALLED =====')
-    console.log('[Generate] Current state:', { 
-      user: user?.uid, 
-      isFirstTimeUser, 
-      isCheckingUserStatus 
-    })
-    
-    // If user is not authenticated, proceed as first-time user
-    if (!user) {
-      console.log('[Generate] No user, proceeding as first-time user')
-      await workflow.startAnalysisGeneration()
-      return
-    }
-
-    // If user status hasn't been checked yet, check it now
-    if (isFirstTimeUser === null && !isCheckingUserStatus) {
-      console.log('[Generate] User status not checked yet, checking now...')
-      setIsCheckingUserStatus(true)
-      try {
-        const status = await getUserPaymentStatus(user.uid)
-        setIsFirstTimeUser(status.isFirstTimeUser)
-        console.log('[Generate] User status checked:', status)
-        
-        // After checking, proceed with the logic
-        if (status.isFirstTimeUser) {
-          console.log('[Generate] First-time user, generating without payment')
-          await workflow.startAnalysisGeneration()
-        } else {
-          console.log('[Generate] Returning user, showing payment modal')
-          setShowPaymentModal(true)
-        }
-      } catch (error) {
-        console.error('[Generate] Error checking user status:', error)
-        // On error, proceed as first-time user
-        setIsFirstTimeUser(true)
-        await workflow.startAnalysisGeneration()
-      } finally {
-        setIsCheckingUserStatus(false)
-      }
-      return
-    }
-
-    // If still checking, wait a bit and retry (or proceed as first-time for better UX)
-    if (isCheckingUserStatus) {
-      console.log('[Generate] User status check in progress, proceeding as first-time user')
-      await workflow.startAnalysisGeneration()
-      return
-    }
-
-    // If first-time user, skip payment and generate directly
-    if (isFirstTimeUser === true) {
-      console.log('[Generate] First-time user, generating without payment')
-      await workflow.startAnalysisGeneration()
-      return
-    }
-
-    // Returning user - show payment modal
-    console.log('[Generate] Returning user, showing payment modal')
-    setShowPaymentModal(true)
+    console.log('[Generate] Generate Report clicked - starting analysis generation')
+    await workflow.startAnalysisGeneration()
   }
 
   const handleViewReport = async () => {
@@ -172,63 +71,6 @@ function GenerateContent() {
     workflow.reset()
     setReportData([])
     setShowReportModal(false)
-    paymentIntentIdRef.current = null // Clear paymentIntentId when starting new report
-  }
-
-  const handlePaymentClose = () => {
-    setShowPaymentModal(false)
-  }
-
-  const handlePaymentSuccess = async (paymentIntentId?: string) => {
-    setShowPaymentModal(false)
-    // Store paymentIntentId in ref to update metadata after analysis is generated
-    if (paymentIntentId) {
-      paymentIntentIdRef.current = paymentIntentId
-      console.log('[Generate] Payment successful, stored paymentIntentId in ref:', paymentIntentId)
-    }
-    // After successful payment, start the analysis generation
-    await workflow.startAnalysisGeneration()
-  }
-
-  // Update payment intent metadata with analysis_id after generation completes
-  const updatePaymentMetadata = async (analysisId: string, currentPaymentIntentId: string) => {
-    if (!currentPaymentIntentId) {
-      console.log('[Generate] No paymentIntentId to update - payment may not have been made before generation')
-      return
-    }
-
-    console.log('[Generate] ===== ATTEMPTING TO UPDATE PAYMENT METADATA =====')
-    console.log('[Generate] paymentIntentId:', currentPaymentIntentId)
-    console.log('[Generate] analysisId:', analysisId)
-
-    try {
-      const response = await fetch('/api/payments/update-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentIntentId: currentPaymentIntentId,
-          analysisId: analysisId,
-        }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        console.error('[Generate] ===== FAILED TO UPDATE PAYMENT INTENT =====')
-        console.error('[Generate] Error response:', error)
-        console.error('[Generate] Status:', response.status)
-        return
-      }
-
-      const data = await response.json()
-      console.log('[Generate] ===== PAYMENT INTENT UPDATED SUCCESSFULLY =====')
-      console.log('[Generate] Updated data:', data)
-      // Clear paymentIntentIdRef after successful update
-      paymentIntentIdRef.current = null
-    } catch (error) {
-      console.error('[Generate] Error updating payment intent:', error)
-    }
   }
 
   const renderCompleted = () => (
@@ -292,16 +134,6 @@ function GenerateContent() {
           hazards={reportData}
           analysisId={workflow.analysisId}
           onClose={() => setShowReportModal(false)}
-        />
-      )}
-
-      {showPaymentModal && (
-        <PaymentModal
-          onClose={handlePaymentClose}
-          onSuccess={handlePaymentSuccess}
-          productName={workflow.productName}
-          amount={5.00}
-          purpose="generation"
         />
       )}
     </main>

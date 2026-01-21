@@ -368,6 +368,7 @@ function PaymentForm({
       console.log('[PaymentForm] Received data:', data)
       console.log('[PaymentForm] Client secret:', data.client_secret ? 'present' : 'missing')
       console.log('[PaymentForm] Final amount from backend:', data.amount)
+      console.log('[PaymentForm] Order status:', data.status)
       
       // Store discount info if coupon was applied
       if (data.amount !== undefined) {
@@ -381,6 +382,23 @@ function PaymentForm({
         if (discount > 0) {
           console.log('[PaymentForm] Coupon applied! Discount:', discount)
         }
+      }
+      
+      // Special case: If amount is $0 (100% discount), order is already completed
+      if (data.amount === 0 || data.status === 'completed') {
+        console.log('[PaymentForm] Order completed with 100% discount - no payment required')
+        
+        // Track free order success
+        trackEvent('free_order_success', {
+          order_id: data.order_id,
+          coupon_code: couponCode || undefined,
+          analysis_id: analysisId || reportId || undefined,
+          product_name: productName || undefined
+        })
+        
+        // Call onSuccess directly (no payment needed)
+        onSuccess(data.order_id)
+        return
       }
       
       // Initialize Stripe with publishable key from backend
