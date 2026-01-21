@@ -337,7 +337,7 @@ function ResultsContent() {
 
   // Auto-trigger restart if restart=1 parameter is present
   useEffect(() => {
-    if (shouldRestart && analysisId && !isLoadingHazards && !isGenerating && !hasTriggeredRestart) {
+    if (shouldRestart && analysisId && !isLoadingHazards && !isGenerating && !hasTriggeredRestart && user) {
       console.log('[Results] Auto-triggering restart for analysis:', analysisId)
       setHasTriggeredRestart(true)
       setShouldRestart(false)
@@ -354,6 +354,19 @@ function ResultsContent() {
           return
         }
 
+        // Check payment status before restarting
+        console.log('[Results] Checking payment status before auto-restart...')
+        const hasPaid = await checkPaymentForGeneration()
+        
+        if (!hasPaid) {
+          // No payment found, show payment modal instead of restarting
+          console.log('[Results] Payment required for restart, showing payment modal')
+          setShowPaymentModal(true)
+          return
+        }
+
+        // Payment verified, proceed with restart
+        console.log('[Results] Payment verified, proceeding with restart')
         try {
           console.log('[Results] Restarting full analysis for:', analysisId)
           const response = await analysisApi.restartFullAnalysis(analysisId)
@@ -383,7 +396,7 @@ function ResultsContent() {
       })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldRestart, analysisId, isLoadingHazards, isGenerating, hasTriggeredRestart])
+  }, [shouldRestart, analysisId, isLoadingHazards, isGenerating, hasTriggeredRestart, user])
 
   // Auto-select first report if no analysis_id is present
   useEffect(() => {
@@ -447,44 +460,46 @@ function ResultsContent() {
       return false
     }
 
+    if (!user) {
+      console.log('[Results] ❌ CONDITION FAILED: No user available')
+      return false
+    }
+
     try {
-      console.log('[Results] Step 1: Querying payments by analysisId...')
-      console.log('[Results] API URL: /api/payments/transactions?analysisId=' + encodeURIComponent(analysisId))
+      // Get Firebase auth token
+      const token = await user.getIdToken()
+      
+      console.log('[Results] Step 1: Querying payment status from backend...')
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+      console.log('[Results] API URL:', `${apiUrl}/orders/analysis/${analysisId}/status`)
       
       // Check if this specific analysis has been paid for
-      const analysisResponse = await fetch(`/api/payments/transactions?analysisId=${encodeURIComponent(analysisId)}`)
+      const analysisResponse = await fetch(`${apiUrl}/orders/analysis/${analysisId}/status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
       
       console.log('[Results] Response status:', analysisResponse.status, analysisResponse.statusText)
       
       if (!analysisResponse.ok) {
         console.log('[Results] ❌ API REQUEST FAILED')
+        const errorData = await analysisResponse.json().catch(() => ({}))
+        console.error('[Results] Error:', errorData)
         throw new Error('Failed to check payment status')
       }
 
       const analysisData = await analysisResponse.json()
       console.log('[Results] Raw API response:', analysisData)
-      console.log('[Results] Total transactions in response:', analysisData.transactions?.length || 0)
       
-      const analysisPayments = analysisData.transactions?.filter((t: any) => t.status === 'succeeded') || []
-      console.log('[Results] Successful payments found:', analysisPayments.length)
-      
-      if (analysisPayments.length > 0) {
+      if (analysisData.paid) {
         console.log('[Results] ✅ CONDITION MET: Payment found for this analysis')
-        console.log('[Results] Payment details:', analysisPayments[0])
-        console.log('[Results] Payment analysisId in metadata:', analysisPayments[0].analysisId)
+        console.log('[Results] Order details:', analysisData.order)
         return true
       }
 
-      console.log('[Results] ❌ CONDITION NOT MET: No payment found with analysisId =', analysisId)
-      console.log('[Results] All transactions returned:', analysisData.transactions)
-      console.log('[Results] Checking what analysisIds are in the transactions:')
-      analysisData.transactions?.forEach((t: any, index: number) => {
-        console.log(`[Results]   Transaction ${index + 1}: analysisId = "${t.analysisId}", status = "${t.status}"`)
-      })
-
-      // If no payment for this analysis, require payment before generation
+      console.log('[Results] ❌ CONDITION NOT MET: No payment found for analysis:', analysisId)
       console.log('[Results] ===== FINAL DECISION: PAYMENT REQUIRED =====')
-      console.log('[Results] Reason: No successful payment found with metadata.analysis_id matching:', analysisId)
       return false
     } catch (error) {
       console.error('[Results] ===== ERROR IN PAYMENT CHECK =====')
@@ -699,9 +714,17 @@ function ResultsContent() {
             <div className={styles.header}>
               <h1 className={styles.title}>{productName || 'PHA Analysis Draft'}</h1>
               {user && automaticSettingsEnabled && (
-                <button className={styles.downloadButton} onClick={handleGenerateWholeReport}>
+                <button 
+                  className={styles.downloadButton} 
+                  onClick={handleGenerateWholeReport}
+                  disabled={!!progressData}
+                  style={{
+                    opacity: progressData ? 0.6 : 1,
+                    cursor: progressData ? 'not-allowed' : 'pointer'
+                  }}
+                >
                   <DownloadIcon />
-                  Generate Whole Report
+                  {progressData ? 'Generating...' : 'Generate Whole Report'}
                 </button>
               )}
               {user && !automaticSettingsEnabled && (

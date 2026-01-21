@@ -7,17 +7,48 @@ import styles from './page.module.css'
 import Header from '@/components/Header'
 import { DownloadIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
-import { Transaction } from '@/lib/types/stripe'
+import { getFirebaseAuth } from '@/lib/firebase'
 import ReceiptModal from '@/components/ReceiptModal'
 import { trackEvent } from '@/lib/analytics'
+
+// Backend transaction type (matches backend API response)
+interface BackendTransaction {
+  id: string
+  order_id: string
+  amount: number
+  currency: string
+  status: 'pending' | 'succeeded' | 'failed' | 'canceled' | 'refunded' | 'requires_action' | 'processing'
+  payment_intent_id: string | null
+  charge_id: string | null
+  payment_method_type: string | null
+  card_brand: string | null
+  card_last4: string | null
+  receipt_url: string | null
+  receipt_number: string | null
+  created_at: string
+  succeeded_at: string | null
+  failed_at: string | null
+  refunded_at: string | null
+  failure_code: string | null
+  failure_message: string | null
+  refund_amount: number | null
+  refund_reason: string | null
+  product_type: string
+  product_id: string
+  product_name: string
+  product_metadata: any
+  coupon_code: string | null
+  discount_amount: number
+  original_amount: number
+}
 
 export default function InvoicesPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<BackendTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<BackendTransaction | null>(null)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
 
   useEffect(() => {
@@ -31,10 +62,27 @@ export default function InvoicesPage() {
         setLoading(true)
         setError(null)
         
-        const response = await fetch(`/api/payments/transactions?userId=${encodeURIComponent(user.uid)}`)
+        // Get Firebase auth token
+        const auth = getFirebaseAuth()
+        const currentUser = auth.currentUser
+        if (!currentUser) {
+          throw new Error('Not authenticated')
+        }
+        
+        const token = await currentUser.getIdToken()
+        
+        // Call backend API
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/orders/transactions?limit=50&offset=0`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
 
         if (!response.ok) {
-          throw new Error('Failed to fetch transactions')
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.detail || 'Failed to fetch transactions')
         }
 
         const data = await response.json()
@@ -68,7 +116,7 @@ export default function InvoicesPage() {
     }).format(amount)
   }
 
-  const getStatusClass = (status: Transaction['status']) => {
+  const getStatusClass = (status: BackendTransaction['status']) => {
     switch (status) {
       case 'succeeded':
         return styles.statusPaid
@@ -77,6 +125,8 @@ export default function InvoicesPage() {
       case 'refunded':
         return styles.statusRefunded
       case 'pending':
+      case 'requires_action':
+      case 'processing':
         return styles.statusPending
       case 'canceled':
         return styles.statusCanceled
@@ -85,8 +135,17 @@ export default function InvoicesPage() {
     }
   }
 
-  const getStatusLabel = (status: Transaction['status']) => {
-    return status.charAt(0).toUpperCase() + status.slice(1)
+  const getStatusLabel = (status: BackendTransaction['status']) => {
+    const labels: Record<string, string> = {
+      'succeeded': 'Paid',
+      'pending': 'Pending',
+      'requires_action': 'Action Required',
+      'processing': 'Processing',
+      'failed': 'Failed',
+      'canceled': 'Canceled',
+      'refunded': 'Refunded'
+    }
+    return labels[status] || status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   return (
@@ -129,9 +188,9 @@ export default function InvoicesPage() {
                 <div className={styles.invoiceHeader}>
                   <div className={styles.invoiceInfo}>
                     <h3 className={styles.invoiceNumber}>
-                      {transaction.description || `Payment ${transaction.id.slice(-8)}`}
+                      {transaction.product_name || `Payment ${transaction.id.slice(-8)}`}
                     </h3>
-                    <p className={styles.invoiceDate}>{formatDate(transaction.createdAt)}</p>
+                    <p className={styles.invoiceDate}>{formatDate(transaction.created_at)}</p>
                   </div>
                   <div className={styles.invoiceAmount}>
                     <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
@@ -141,38 +200,101 @@ export default function InvoicesPage() {
                   </div>
                 </div>
                 <div className={styles.invoiceBody}>
-                  {transaction.productName && (
+                  {transaction.product_name && (
                     <p className={styles.invoiceReport}>
-                      Report: <strong>{transaction.productName}</strong>
+                      Product: <strong>{transaction.product_name}</strong>
+                    </p>
+                  )}
+                  {transaction.coupon_code && (
+                    <p className={styles.invoiceReport}>
+                      Coupon: <strong>{transaction.coupon_code}</strong> 
+                      {transaction.discount_amount > 0 && (
+                        <span> (Saved {formatCurrency(transaction.discount_amount, transaction.currency)})</span>
+                      )}
+                    </p>
+                  )}
+                  {transaction.payment_method_type && (
+                    <p className={styles.invoiceDescription}>
+                      Payment Method: {transaction.card_brand ? transaction.card_brand.toUpperCase() : transaction.payment_method_type.toUpperCase()}
+                      {transaction.card_last4 && ` •••• ${transaction.card_last4}`}
                     </p>
                   )}
                   <p className={styles.invoiceDescription}>
-                    Payment ID: {transaction.paymentIntentId}
+                    Payment ID: {transaction.payment_intent_id || transaction.id}
                   </p>
+                  {transaction.receipt_number && (
+                    <p className={styles.invoiceDescription}>
+                      Receipt: {transaction.receipt_number}
+                    </p>
+                  )}
                 </div>
                 {transaction.status === 'succeeded' && (
                   <div className={styles.invoiceActions}>
                     <button
                       onClick={() => {
-                        trackEvent('click_view_receipt', {
-                          transaction_id: transaction.id,
-                          payment_intent_id: transaction.paymentIntentId,
-                          amount: transaction.amount,
-                          product_name: transaction.productName || undefined
-                        })
                         setSelectedTransaction(transaction)
                         setShowReceiptModal(true)
+                        trackEvent('view_transaction_details', {
+                          transaction_id: transaction.id,
+                          payment_intent_id: transaction.payment_intent_id,
+                          amount: transaction.amount,
+                          product_name: transaction.product_name || undefined
+                        })
                       }}
-                      className={styles.downloadButton}
+                      className={styles.viewButton}
                     >
-                      <DownloadIcon />
-                      View Receipt
+                      View Details
                     </button>
+                    {transaction.receipt_url && (
+                      <a
+                        href={transaction.receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          trackEvent('click_stripe_receipt', {
+                            transaction_id: transaction.id,
+                            payment_intent_id: transaction.payment_intent_id,
+                            amount: transaction.amount,
+                            product_name: transaction.product_name || undefined
+                          })
+                        }}
+                        className={styles.downloadButton}
+                      >
+                        <DownloadIcon />
+                        View Stripe Receipt
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
             ))}
           </div>
+        )}
+
+        {showReceiptModal && selectedTransaction && (
+          <ReceiptModal
+            isOpen={showReceiptModal}
+            onClose={() => {
+              setShowReceiptModal(false)
+              setSelectedTransaction(null)
+            }}
+            transaction={{
+              id: selectedTransaction.id,
+              description: selectedTransaction.product_name || `Payment ${selectedTransaction.id.slice(-8)}`,
+              amount: selectedTransaction.amount,
+              currency: selectedTransaction.currency,
+              status: selectedTransaction.status as any,
+              createdAt: selectedTransaction.created_at,
+              succeededAt: selectedTransaction.succeeded_at || undefined,
+              productName: selectedTransaction.product_name,
+              paymentMethod: selectedTransaction.payment_method_type || undefined,
+              cardBrand: selectedTransaction.card_brand || undefined,
+              cardLast4: selectedTransaction.card_last4 || undefined,
+              receiptUrl: selectedTransaction.receipt_url || undefined,
+              receiptNumber: selectedTransaction.receipt_number || undefined
+            }}
+            purpose="download"
+          />
         )}
 
         <div className={styles.summarySection}>
@@ -188,7 +310,7 @@ export default function InvoicesPage() {
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>Pending</span>
                 <span className={styles.statValue}>
-                  {formatCurrency(transactions.filter(t => t.status === 'pending').reduce((sum, t) => sum + t.amount, 0))}
+                  {formatCurrency(transactions.filter(t => ['pending', 'processing', 'requires_action'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0))}
                 </span>
               </div>
               <div className={styles.statItem}>
@@ -199,22 +321,6 @@ export default function InvoicesPage() {
           </div>
         </div>
       </div>
-
-      {showReceiptModal && selectedTransaction && (
-        <ReceiptModal
-          isOpen={showReceiptModal}
-          onClose={() => {
-            trackEvent('close_receipt_modal', {
-              transaction_id: selectedTransaction.id,
-              payment_intent_id: selectedTransaction.paymentIntentId
-            })
-            setShowReceiptModal(false)
-            setSelectedTransaction(null)
-          }}
-          transaction={selectedTransaction}
-          purpose="download"
-        />
-      )}
     </main>
   )
 }

@@ -19,6 +19,7 @@ interface GenerateWorkflowContentProps {
   handleNewSearch: (e: React.FormEvent) => void
   handleToggleProduct: (productId: string) => void
   handleGenerateReport: () => void
+  isSubmitting?: boolean
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
   countdown?: number | null
@@ -41,6 +42,7 @@ export default function GenerateWorkflowContent({
   handleNewSearch,
   handleToggleProduct,
   handleGenerateReport,
+  isSubmitting = false,
   styles,
   renderCompleted,
   countdown
@@ -275,9 +277,9 @@ export default function GenerateWorkflowContent({
             <button 
               className={styles.generateButton}
               onClick={handleGenerateReport}
-              disabled={selectedProducts.size === 0}
+              disabled={selectedProducts.size === 0 || isSubmitting}
             >
-              Generate Report
+              {isSubmitting ? 'Submitting...' : 'Generate Report'}
             </button>
           </div>
         </div>

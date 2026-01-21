@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import styles from './PaymentModal.module.css'
@@ -9,9 +9,44 @@ import { useAuth } from '@/lib/auth'
 import { Transaction } from '@/lib/types/stripe'
 import ReceiptModal from './ReceiptModal'
 import { trackEvent } from '@/lib/analytics'
+import { getFirebaseAuth } from '@/lib/firebase'
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
+// API URL for backend
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+
+// Backend transaction type (matches backend API response)
+interface BackendTransaction {
+  id: string
+  order_id: string
+  amount: number
+  currency: string
+  status: 'pending' | 'succeeded' | 'failed' | 'canceled' | 'refunded' | 'requires_action' | 'processing'
+  payment_intent_id: string | null
+  charge_id: string | null
+  payment_method_type: string | null
+  card_brand: string | null
+  card_last4: string | null
+  receipt_url: string | null
+  receipt_number: string | null
+  created_at: string
+  succeeded_at: string | null
+  failed_at: string | null
+  refunded_at: string | null
+  failure_code: string | null
+  failure_message: string | null
+  refund_amount: number | null
+  refund_reason: string | null
+  product_type: string
+  product_id: string
+  product_name: string
+  product_metadata: any
+  coupon_code: string | null
+  discount_amount: number
+  original_amount: number
+}
+
+// Initialize Stripe (will be set dynamically from backend response)
+let stripePromise: Promise<any> | null = null
 
 type PaymentPurpose = 'generation' | 'download'
 
@@ -31,32 +66,117 @@ type TabType = 'payment' | 'history'
 function PaymentFormInner({ 
   onSuccess, 
   onClose, 
-  reportId, 
+  reportId,
+  analysisId,
+  productType = 'analysis',
+  productId,
   productName, 
   amount = 5.00,
+  finalAmount,
   clientSecret,
   onProcessingChange
 }: {
   onSuccess: (paymentIntentId?: string) => void
   onClose: () => void
   reportId?: string
+  analysisId?: string
+  productType?: string
+  productId?: string
   productName?: string
   amount?: number
+  finalAmount?: number
   clientSecret: string
   onProcessingChange?: (isProcessing: boolean) => void
 }) {
   const stripe = useStripe()
   const elements = useElements()
+  const { user } = useAuth()
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isPolling, setIsPolling] = useState(false)
+  const shouldContinuePollingRef = useRef(true)
 
   // Notify parent when processing state changes
   useEffect(() => {
     if (onProcessingChange) {
-      onProcessingChange(isProcessing)
+      onProcessingChange(isProcessing || isPolling)
     }
-  }, [isProcessing, onProcessingChange])
+  }, [isProcessing, isPolling, onProcessingChange])
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      shouldContinuePollingRef.current = false
+      setIsPolling(false)
+    }
+  }, [])
+
+  // Poll backend to check payment status
+  const pollPaymentStatus = async (paymentIntentId: string): Promise<boolean> => {
+    if (!user) {
+      console.error('[Payment] No user for polling')
+      return false
+    }
+    
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+    const prodId = productId || analysisId || reportId
+    
+    if (!prodId) {
+      console.error('[Payment] No product ID available for polling')
+      return false
+    }
+    
+    setIsPolling(true)
+    shouldContinuePollingRef.current = true
+    console.log('[Payment] Starting payment status polling for product:', prodId)
+    
+    try {
+      const token = await user.getIdToken()
+      let attempts = 0
+      const maxAttempts = 30 // Poll for up to 30 seconds
+      
+      while (shouldContinuePollingRef.current && attempts < maxAttempts) {
+        try {
+          const statusResponse = await fetch(
+            `${apiUrl}/orders/${productType}/${prodId}/status`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            }
+          )
+          
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            console.log(`[Payment] Status check attempt ${attempts + 1}:`, statusData.paid ? 'PAID' : 'NOT PAID')
+            
+            if (statusData.paid) {
+              console.log('[Payment] Payment confirmed by backend!')
+              setIsPolling(false)
+              return true
+            }
+          } else {
+            console.warn('[Payment] Status check failed:', statusResponse.status)
+          }
+        } catch (err) {
+          console.error('[Payment] Error checking payment status:', err)
+        }
+        
+        attempts++
+        if (attempts < maxAttempts && shouldContinuePollingRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+        }
+      }
+      
+      console.log(`[Payment] Polling ended after ${attempts} attempts, cancelled: ${!shouldContinuePollingRef.current}`)
+      setIsPolling(false)
+      return false
+    } catch (err) {
+      console.error('[Payment] Polling error:', err)
+      setIsPolling(false)
+      return false
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,20 +219,7 @@ function PaymentFormInner({
         return
       }
 
-      // Payment succeeded - confirm with backend
-      const confirmResponse = await fetch('/api/payments/confirm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentIntentId: paymentIntent.id,
-        }),
-      })
-
-      if (!confirmResponse.ok) {
-        throw new Error('Failed to confirm payment')
-      }
+      console.log('[Payment] Payment succeeded, PaymentIntent ID:', paymentIntent.id)
 
       // Track payment success
       trackEvent('payment_success', {
@@ -121,8 +228,25 @@ function PaymentFormInner({
         product_name: productName || undefined
       })
 
-      // Success! Pass paymentIntentId to parent
-      onSuccess(paymentIntent.id)
+      // Poll backend to verify payment status before calling onSuccess
+      console.log('[Payment] Waiting for backend confirmation...')
+      const confirmed = await pollPaymentStatus(paymentIntent.id)
+      
+      if (confirmed) {
+        console.log('[Payment] Payment confirmed by backend, calling onSuccess')
+        onSuccess(paymentIntent.id)
+      } else {
+        // Payment succeeded in Stripe but not confirmed by backend
+        const errorMsg = 'Payment processing is taking longer than expected. Please check your payment history or contact support.'
+        setError(errorMsg)
+        console.error('[Payment] Backend confirmation failed or timed out')
+        
+        // Track backend confirmation failure
+        trackEvent('payment_backend_confirmation_failed', {
+          payment_intent_id: paymentIntent.id,
+          product_name: productName || undefined
+        })
+      }
     } catch (err: any) {
       const errorMessage = err.message || 'Payment processing failed'
       setError(errorMessage)
@@ -135,6 +259,7 @@ function PaymentFormInner({
       })
     } finally {
       setIsProcessing(false)
+      setIsPolling(false)
     }
   }
 
@@ -153,9 +278,9 @@ function PaymentFormInner({
       <button 
         type="submit" 
         className={styles.payButton}
-        disabled={isProcessing || !stripe}
+        disabled={isProcessing || isPolling || !stripe}
       >
-        {isProcessing ? 'Processing...' : `Pay $${amount.toFixed(2)}`}
+        {(isProcessing || isPolling) ? 'Processing...' : `Pay $${(finalAmount || amount).toFixed(2)}`}
       </button>
     </form>
   )
@@ -183,6 +308,8 @@ function PaymentForm({
   const [error, setError] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isInitializing, setIsInitializing] = useState(false)
+  const [couponCode, setCouponCode] = useState<string>('')
+  const [discountInfo, setDiscountInfo] = useState<{ discount: number; finalAmount: number } | null>(null)
 
   // Create payment intent only when user is ready to pay
   const handleInitializePayment = async () => {
@@ -207,19 +334,24 @@ function PaymentForm({
     console.log('[PaymentForm] Starting payment initialization...')
 
     try {
-      console.log('[PaymentForm] Sending request to /api/payments/create-intent')
-      const response = await fetch('/api/payments/create-intent', {
+      // Get Firebase auth token
+      const token = await user.getIdToken()
+      
+      console.log('[PaymentForm] Sending request to backend /orders/create')
+      const response = await fetch(`${API_URL}/orders/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          amount: amount,
-          currency: 'usd',
-          reportId: reportId,
-          analysisId: analysisId || reportId, // Use analysisId if provided, otherwise fallback to reportId
-          userId: user.uid,
-          productName: productName,
+          product_type: 'analysis',
+          product_id: analysisId || reportId,
+          coupon_code: couponCode.trim() || null,
+          product_metadata: {
+            product_name: productName,
+            report_id: reportId,
+          },
         }),
       })
 
@@ -229,14 +361,34 @@ function PaymentForm({
       if (!response.ok) {
         const errorData = await response.json()
         console.error('[PaymentForm] Error response:', errorData)
-        throw new Error(errorData.error || 'Failed to create payment intent')
+        throw new Error(errorData.detail || 'Failed to create order')
       }
 
       const data = await response.json()
       console.log('[PaymentForm] Received data:', data)
-      console.log('[PaymentForm] Client secret:', data.clientSecret ? 'present' : 'missing')
+      console.log('[PaymentForm] Client secret:', data.client_secret ? 'present' : 'missing')
+      console.log('[PaymentForm] Final amount from backend:', data.amount)
       
-      setClientSecret(data.clientSecret)
+      // Store discount info if coupon was applied
+      if (data.amount !== undefined) {
+        const originalAmount = amount
+        const finalAmount = data.amount
+        const discount = originalAmount - finalAmount
+        
+        // Update discount info even if discount is 0 (to show we checked)
+        setDiscountInfo({ discount, finalAmount })
+        
+        if (discount > 0) {
+          console.log('[PaymentForm] Coupon applied! Discount:', discount)
+        }
+      }
+      
+      // Initialize Stripe with publishable key from backend
+      if (data.stripe_publishable_key) {
+        stripePromise = loadStripe(data.stripe_publishable_key)
+      }
+      
+      setClientSecret(data.client_secret)
       console.log('[PaymentForm] Client secret set successfully')
     } catch (err: any) {
       console.error('[PaymentForm] Error caught:', err)
@@ -252,9 +404,34 @@ function PaymentForm({
     console.log('[PaymentForm] Rendering init state, clientSecret:', clientSecret)
     return (
       <div className={styles.paymentInitState}>
+        <div className={styles.couponSection}>
+          <input
+            id="coupon-code"
+            type="text"
+            className={styles.couponInput}
+            placeholder="Enter coupon code (Optional)"
+            value={couponCode}
+            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+            disabled={isInitializing}
+          />
+          <p className={styles.couponHint}>
+            Have a discount code? Enter it here before proceeding.
+          </p>
+        </div>
+        
+        {discountInfo && (
+          <div className={styles.discountInfo}>
+            <p className={styles.discountLabel}>✓ Coupon Applied!</p>
+            <p className={styles.discountAmount}>
+              Save ${discountInfo.discount.toFixed(2)} - New Total: ${discountInfo.finalAmount.toFixed(2)}
+            </p>
+          </div>
+        )}
+        
         <p className={styles.initText}>
           Click the button below to proceed with payment
         </p>
+        
         <button
           type="button"
           className={styles.initButton}
@@ -267,7 +444,7 @@ function PaymentForm({
               Initializing payment...
             </>
           ) : (
-            `Proceed to Payment - $${amount.toFixed(2)}`
+            discountInfo ? `Proceed to Payment - $${discountInfo.finalAmount.toFixed(2)}` : `Proceed to Payment - $${amount.toFixed(2)}`
           )}
         </button>
         {error && (
@@ -280,14 +457,24 @@ function PaymentForm({
   }
 
   console.log('[PaymentForm] Rendering payment element with clientSecret')
+  
+  // Ensure stripePromise is initialized
+  if (!stripePromise) {
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
+  }
+  
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
       <PaymentFormInner
         onSuccess={onSuccess}
         onClose={onClose}
         reportId={reportId}
+        analysisId={analysisId}
+        productType="analysis"
+        productId={analysisId || reportId}
         productName={productName}
         amount={amount}
+        finalAmount={discountInfo?.finalAmount}
         clientSecret={clientSecret}
         onProcessingChange={onProcessingChange}
       />
@@ -297,24 +484,44 @@ function PaymentForm({
 
 // Transaction history component
 function TransactionHistory({ userId, purpose }: { userId: string; purpose?: PaymentPurpose }) {
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<BackendTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<BackendTransaction | null>(null)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
 
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`/api/payments/transactions?userId=${encodeURIComponent(userId)}`)
+        setError(null)
+        
+        // Get Firebase auth token
+        const auth = getFirebaseAuth()
+        const currentUser = auth.currentUser
+        if (!currentUser) {
+          throw new Error('Not authenticated')
+        }
+        
+        const token = await currentUser.getIdToken()
+        
+        // Call backend API
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/orders/transactions?limit=50&offset=0`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
 
         if (!response.ok) {
-          throw new Error('Failed to fetch transactions')
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.detail || 'Failed to fetch transactions')
         }
 
         const data = await response.json()
         setTransactions(data.transactions || [])
+        console.log('[Transactions] Loaded transactions:', data.transactions?.length || 0)
       } catch (err: any) {
         setError(err.message || 'Failed to load transactions')
         console.error('[Transactions] Error:', err)
@@ -346,7 +553,7 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
     }).format(amount)
   }
 
-  const getStatusClass = (status: Transaction['status']) => {
+  const getStatusClass = (status: BackendTransaction['status']) => {
     switch (status) {
       case 'succeeded':
         return styles.statusSuccess
@@ -355,12 +562,27 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
       case 'refunded':
         return styles.statusRefunded
       case 'pending':
+      case 'requires_action':
+      case 'processing':
         return styles.statusPending
       case 'canceled':
         return styles.statusCanceled
       default:
         return ''
     }
+  }
+
+  const getStatusLabel = (status: BackendTransaction['status']) => {
+    const labels: Record<string, string> = {
+      'succeeded': 'Paid',
+      'pending': 'Pending',
+      'requires_action': 'Action Required',
+      'processing': 'Processing',
+      'failed': 'Failed',
+      'canceled': 'Canceled',
+      'refunded': 'Refunded'
+    }
+    return labels[status] || status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   if (loading) {
@@ -398,23 +620,47 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
           <div className={styles.transactionHeader}>
             <div className={styles.transactionInfo}>
               <h4 className={styles.transactionId}>
-                {transaction.description || `Payment ${transaction.id.slice(-8)}`}
+                {transaction.product_name || `Payment ${transaction.id.slice(-8)}`}
               </h4>
-              <p className={styles.transactionDate}>{formatDate(transaction.createdAt)}</p>
+              <p className={styles.transactionDate}>{formatDate(transaction.created_at)}</p>
             </div>
             <div className={styles.transactionAmount}>
               <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
               <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
-                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                {getStatusLabel(transaction.status)}
               </span>
             </div>
           </div>
           
-          {transaction.productName && (
-            <p className={styles.transactionProduct}>
-              Report: <strong>{transaction.productName}</strong>
+          <div className={styles.transactionBody}>
+            {transaction.product_name && (
+              <p className={styles.transactionProduct}>
+                Product: <strong>{transaction.product_name}</strong>
+              </p>
+            )}
+            {transaction.coupon_code && (
+              <p className={styles.transactionProduct}>
+                Coupon: <strong>{transaction.coupon_code}</strong> 
+                {transaction.discount_amount > 0 && (
+                  <span> (Saved {formatCurrency(transaction.discount_amount, transaction.currency)})</span>
+                )}
+              </p>
+            )}
+            {transaction.payment_method_type && (
+              <p className={styles.transactionDescription}>
+                Payment Method: {transaction.card_brand ? transaction.card_brand.toUpperCase() : transaction.payment_method_type.toUpperCase()}
+                {transaction.card_last4 && ` •••• ${transaction.card_last4}`}
+              </p>
+            )}
+            <p className={styles.transactionDescription}>
+              Payment ID: {transaction.payment_intent_id || transaction.id}
             </p>
-          )}
+            {transaction.receipt_number && (
+              <p className={styles.transactionDescription}>
+                Receipt: {transaction.receipt_number}
+              </p>
+            )}
+          </div>
 
           {transaction.status === 'succeeded' && (
             <div className={styles.transactionActions}>
@@ -422,12 +668,18 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
                 onClick={() => {
                   setSelectedTransaction(transaction)
                   setShowReceiptModal(true)
+                  trackEvent('view_transaction_details', {
+                    transaction_id: transaction.id,
+                    payment_intent_id: transaction.payment_intent_id,
+                    amount: transaction.amount,
+                    product_name: transaction.product_name || undefined
+                  })
                 }}
                 className={styles.receiptButton}
               >
-                <DownloadIcon />
-                View Receipt
+                View Details
               </button>
+            
             </div>
           )}
         </div>
@@ -440,7 +692,25 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
             setShowReceiptModal(false)
             setSelectedTransaction(null)
           }}
-          transaction={selectedTransaction}
+          transaction={{
+            id: selectedTransaction.id,
+            description: selectedTransaction.product_name || `Payment ${selectedTransaction.id.slice(-8)}`,
+            amount: selectedTransaction.amount,
+            currency: selectedTransaction.currency,
+            status: selectedTransaction.status as any,
+            createdAt: selectedTransaction.created_at,
+            productName: selectedTransaction.product_name,
+            paymentIntentId: selectedTransaction.payment_intent_id || '',
+            receiptUrl: selectedTransaction.receipt_url || null,
+            receiptNumber: selectedTransaction.receipt_number || undefined,
+            paymentMethod: selectedTransaction.payment_method_type ? {
+              type: selectedTransaction.payment_method_type,
+              card: selectedTransaction.card_brand && selectedTransaction.card_last4 ? {
+                brand: selectedTransaction.card_brand,
+                last4: selectedTransaction.card_last4
+              } : undefined
+            } : undefined
+          }}
           purpose={purpose}
         />
       )}
@@ -552,6 +822,7 @@ export default function PaymentModal({
                 analysisId={analysisId}
                 productName={productName}
                 amount={amount}
+                onProcessingChange={setIsPaymentProcessing}
               />
             ) : (
               user ? (
