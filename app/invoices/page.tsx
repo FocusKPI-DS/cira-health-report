@@ -280,17 +280,23 @@ export default function InvoicesPage() {
             }}
             transaction={{
               id: selectedTransaction.id,
+              paymentIntentId: selectedTransaction.payment_intent_id || selectedTransaction.id,
               description: selectedTransaction.product_name || `Payment ${selectedTransaction.id.slice(-8)}`,
               amount: selectedTransaction.amount,
               currency: selectedTransaction.currency,
               status: selectedTransaction.status as any,
               createdAt: selectedTransaction.created_at,
-              succeededAt: selectedTransaction.succeeded_at || undefined,
               productName: selectedTransaction.product_name,
-              paymentMethod: selectedTransaction.payment_method_type || undefined,
-              cardBrand: selectedTransaction.card_brand || undefined,
-              cardLast4: selectedTransaction.card_last4 || undefined,
-              receiptUrl: selectedTransaction.receipt_url || undefined,
+              paymentMethod: selectedTransaction.payment_method_type ? {
+                type: selectedTransaction.payment_method_type,
+                ...(selectedTransaction.card_brand && selectedTransaction.card_last4 ? {
+                  card: {
+                    brand: selectedTransaction.card_brand,
+                    last4: selectedTransaction.card_last4
+                  }
+                } : {})
+              } : undefined,
+              receiptUrl: selectedTransaction.receipt_url || null,
               receiptNumber: selectedTransaction.receipt_number || undefined
             }}
             purpose="download"
