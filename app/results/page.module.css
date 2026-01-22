@@ -618,6 +618,39 @@
   box-shadow: 0 15px 40px rgba(16, 185, 129, 0.4);
 }
 
+.generateWholeReportButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.3);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.generateWholeReportButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.generateWholeReportButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+    box-shadow: 0 15px 40px rgba(14, 165, 233, 0.5);
+}
+
+.generateWholeReportButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .ctaSection {
   margin-top: 0;
   margin-bottom: 2rem;

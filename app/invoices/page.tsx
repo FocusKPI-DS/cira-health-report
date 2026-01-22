@@ -50,6 +50,19 @@ export default function InvoicesPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<BackendTransaction | null>(null)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
+  const [pageInput, setPageInput] = useState('1')
+  
+  // Statistics from backend
+  const [statistics, setStatistics] = useState<{
+    total_paid: number
+    total_pending: number
+    total_transactions: number
+  } | null>(null)
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -71,9 +84,10 @@ export default function InvoicesPage() {
         
         const token = await currentUser.getIdToken()
         
-        // Call backend API
+        // Call backend API with pagination
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/orders/transactions?limit=50&offset=0`, {
+        const offset = (currentPage - 1) * pageSize
+        const response = await fetch(`${apiUrl}/orders/transactions?limit=${pageSize}&offset=${offset}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -87,6 +101,8 @@ export default function InvoicesPage() {
 
         const data = await response.json()
         setTransactions(data.transactions || [])
+        setTotalCount(data.total_count || 0)
+        setStatistics(data.statistics || null)
       } catch (err: any) {
         setError(err.message || 'Failed to load transactions')
         console.error('[Invoices] Error:', err)
@@ -96,7 +112,12 @@ export default function InvoicesPage() {
     }
 
     fetchTransactions()
-  }, [user])
+  }, [user, currentPage, pageSize])
+
+  // Sync pageInput with currentPage when currentPage changes
+  useEffect(() => {
+    setPageInput(currentPage.toString())
+  }, [currentPage])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -148,6 +169,8 @@ export default function InvoicesPage() {
     return labels[status] || status.charAt(0).toUpperCase() + status.slice(1)
   }
 
+  const totalPages = Math.ceil(totalCount / pageSize)
+
   return (
     <main className={styles.main} style={{ flex: 1 }}>
       <Header showUserMenu={true} />
@@ -185,89 +208,213 @@ export default function InvoicesPage() {
           <div className={styles.invoicesList}>
             {transactions.map((transaction) => (
               <div key={transaction.id} className={styles.invoiceCard}>
-                <div className={styles.invoiceHeader}>
-                  <div className={styles.invoiceInfo}>
-                    <h3 className={styles.invoiceNumber}>
+                <div className={styles.invoiceRow}>
+                  {/* 左侧信息栏 */}
+                  <div className={styles.invoiceLeft}>
+                    <h3 className={styles.invoiceProductName}>
                       {transaction.product_name || `Payment ${transaction.id.slice(-8)}`}
                     </h3>
-                    <p className={styles.invoiceDate}>{formatDate(transaction.created_at)}</p>
-                  </div>
-                  <div className={styles.invoiceAmount}>
-                    <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
-                    <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
-                      {getStatusLabel(transaction.status)}
-                    </span>
-                  </div>
-                </div>
-                <div className={styles.invoiceBody}>
-                  {transaction.product_name && (
-                    <p className={styles.invoiceReport}>
-                      Product: <strong>{transaction.product_name}</strong>
-                    </p>
-                  )}
-                  {transaction.coupon_code && (
-                    <p className={styles.invoiceReport}>
-                      Coupon: <strong>{transaction.coupon_code}</strong> 
-                      {transaction.discount_amount > 0 && (
-                        <span> (Saved {formatCurrency(transaction.discount_amount, transaction.currency)})</span>
-                      )}
-                    </p>
-                  )}
-                  {transaction.payment_method_type && (
-                    <p className={styles.invoiceDescription}>
-                      Payment Method: {transaction.card_brand ? transaction.card_brand.toUpperCase() : transaction.payment_method_type.toUpperCase()}
-                      {transaction.card_last4 && ` •••• ${transaction.card_last4}`}
-                    </p>
-                  )}
-                  <p className={styles.invoiceDescription}>
-                    Payment ID: {transaction.payment_intent_id || transaction.id}
-                  </p>
-                  {transaction.receipt_number && (
-                    <p className={styles.invoiceDescription}>
-                      Receipt: {transaction.receipt_number}
-                    </p>
-                  )}
-                </div>
-                {transaction.status === 'succeeded' && (
-                  <div className={styles.invoiceActions}>
-                    <button
-                      onClick={() => {
-                        setSelectedTransaction(transaction)
-                        setShowReceiptModal(true)
-                        trackEvent('view_transaction_details', {
-                          transaction_id: transaction.id,
-                          payment_intent_id: transaction.payment_intent_id,
-                          amount: transaction.amount,
-                          product_name: transaction.product_name || undefined
-                        })
-                      }}
-                      className={styles.viewButton}
-                    >
-                      View Details
-                    </button>
-                    {transaction.receipt_url && (
-                      <a
-                        href={transaction.receipt_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => {
-                          trackEvent('click_stripe_receipt', {
-                            transaction_id: transaction.id,
-                            payment_intent_id: transaction.payment_intent_id,
-                            amount: transaction.amount,
-                            product_name: transaction.product_name || undefined
-                          })
-                        }}
-                        className={styles.downloadButton}
-                      >
-                        <DownloadIcon />
-                        View Stripe Receipt
-                      </a>
+                    <span className={styles.invoiceDate}>{formatDate(transaction.created_at)}</span>
+                    {transaction.coupon_code && (
+                      <span className={styles.invoiceReport}>
+                        Coupon: <strong>{transaction.coupon_code}</strong>
+                        {transaction.discount_amount > 0 && (
+                          <span> (Saved {formatCurrency(transaction.discount_amount, transaction.currency)})</span>
+                        )}
+                      </span>
+                    )}
+                    {transaction.payment_method_type && (
+                      <span className={styles.invoiceDescription}>
+                        Payment Method: {transaction.card_brand ? transaction.card_brand.toUpperCase() : transaction.payment_method_type.toUpperCase()}
+                        {transaction.card_last4 && ` •••• ${transaction.card_last4}`}
+                      </span>
                     )}
                   </div>
-                )}
+                  {/* 右侧金额/状态/按钮栏 */}
+                  <div className={styles.invoiceRight}>
+                    <div className={styles.invoiceAmount}>
+                      <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
+                      <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
+                        {getStatusLabel(transaction.status)}
+                      </span>
+                    </div>
+                    {transaction.status === 'succeeded' && (
+                      <div className={styles.invoiceActions}>
+                        <button
+                          onClick={() => {
+                            setSelectedTransaction(transaction)
+                            setShowReceiptModal(true)
+                            trackEvent('view_transaction_details', {
+                              transaction_id: transaction.id,
+                              payment_intent_id: transaction.payment_intent_id,
+                              amount: transaction.amount,
+                              product_name: transaction.product_name || undefined
+                            })
+                          }}
+                          className={styles.viewButton}
+                        >
+                          View Details
+                        </button>
+                        
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!loading && transactions.length > 0 && (
+          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'nowrap', gap: '8px', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  color: currentPage === 1 ? '#94a3b8' : 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                ⟨⟨ First
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  color: currentPage === 1 ? '#94a3b8' : 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                ← Prev
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 1 auto', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                  Page
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max={totalPages}
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const page = Number(pageInput)
+                      if (page >= 1 && page <= totalPages) {
+                        setCurrentPage(page)
+                      } else if (page < 1) {
+                        setCurrentPage(1)
+                        setPageInput('1')
+                      } else if (page > totalPages) {
+                        setCurrentPage(totalPages)
+                        setPageInput(totalPages.toString())
+                      }
+                    }
+                  }}
+                  style={{
+                    width: '50px',
+                    padding: '4px 6px',
+                    border: '1px solid rgba(14, 165, 233, 0.2)',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    textAlign: 'center'
+                  }}
+                />
+                <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                  / {totalPages}
+                </span>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                  Per page:
+                </label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  style={{
+                    padding: '4px 6px',
+                    border: '1px solid rgba(14, 165, 233, 0.2)',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    backgroundColor: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Next →
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage >= totalPages}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                  color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Last ⟩⟩
+              </button>
+            </div>
           </div>
         )}
 
@@ -310,18 +457,18 @@ export default function InvoicesPage() {
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>Total Paid</span>
                 <span className={styles.statValue}>
-                  {formatCurrency(transactions.filter(t => t.status === 'succeeded').reduce((sum, t) => sum + t.amount, 0))}
+                  {statistics ? formatCurrency(statistics.total_paid) : '$0.00'}
                 </span>
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>Pending</span>
                 <span className={styles.statValue}>
-                  {formatCurrency(transactions.filter(t => ['pending', 'processing', 'requires_action'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0))}
+                  {statistics ? formatCurrency(statistics.total_pending) : '$0.00'}
                 </span>
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>Total Transactions</span>
-                <span className={styles.statValue}>{transactions.length}</span>
+                <span className={styles.statValue}>{statistics ? statistics.total_transactions : 0}</span>
               </div>
             </div>
           </div>

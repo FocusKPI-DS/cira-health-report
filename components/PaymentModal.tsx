@@ -310,6 +310,86 @@ function PaymentForm({
   const [isInitializing, setIsInitializing] = useState(false)
   const [couponCode, setCouponCode] = useState<string>('')
   const [discountInfo, setDiscountInfo] = useState<{ discount: number; finalAmount: number } | null>(null)
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [couponValidated, setCouponValidated] = useState(false)
+
+  // Validate coupon code
+  const handleValidateCoupon = async () => {
+    if (!user) {
+      setCouponError('Please log in to validate coupon')
+      return
+    }
+
+    if (!couponCode.trim()) {
+      setCouponError('Please enter a coupon code')
+      return
+    }
+
+    setIsValidatingCoupon(true)
+    setCouponError(null)
+    setDiscountInfo(null)
+    setCouponValidated(false)
+    console.log('[Coupon] Validating coupon:', couponCode)
+
+    try {
+      const token = await user.getIdToken()
+      
+      const response = await fetch(`${API_URL}/orders/validate-coupon`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          coupon_code: couponCode.trim(),
+        }),
+      })
+
+      const data = await response.json()
+      console.log('[Coupon] Validation response:', data)
+
+      if (data.success && data.valid) {
+        const discount = data.discount_amount
+        const finalAmount = data.final_amount
+        
+        setDiscountInfo({ discount, finalAmount })
+        setCouponValidated(true)
+        
+        // Track successful coupon validation
+        trackEvent('coupon_validated_success', {
+          coupon_code: couponCode,
+          discount_amount: discount,
+          final_amount: finalAmount,
+          discount_type: data.discount_type,
+          analysis_id: analysisId || reportId || undefined
+        })
+      } else {
+        setCouponError(data.message || 'Invalid coupon code')
+        setCouponValidated(false)
+        
+        // Track failed coupon validation
+        trackEvent('coupon_validated_failed', {
+          coupon_code: couponCode,
+          error: data.message,
+          analysis_id: analysisId || reportId || undefined
+        })
+      }
+    } catch (err: any) {
+      console.error('[Coupon] Error validating coupon:', err)
+      setCouponError(err.message || 'Failed to validate coupon')
+      setCouponValidated(false)
+      
+      // Track coupon validation error
+      trackEvent('coupon_validation_error', {
+        coupon_code: couponCode,
+        error: err.message,
+        analysis_id: analysisId || reportId || undefined
+      })
+    } finally {
+      setIsValidatingCoupon(false)
+    }
+  }
 
   // Create payment intent only when user is ready to pay
   const handleInitializePayment = async () => {
@@ -423,36 +503,66 @@ function PaymentForm({
     return (
       <div className={styles.paymentInitState}>
         <div className={styles.couponSection}>
-          <input
-            id="coupon-code"
-            type="text"
-            className={styles.couponInput}
-            placeholder="Enter coupon code (Optional)"
-            value={couponCode}
-            onChange={(e) => {
-              const newCode = e.target.value.toUpperCase()
-              setCouponCode(newCode)
-              if (newCode.length >= 3) {
-                trackEvent('enter_coupon_code', {
-                  analysis_id: analysisId || reportId || undefined
-                })
-              }
-            }}
-            disabled={isInitializing}
-          />
-          <p className={styles.couponHint}>
-            Have a discount code? Enter it here before proceeding.
-          </p>
-        </div>
-        
-        {discountInfo && (
-          <div className={styles.discountInfo}>
-            <p className={styles.discountLabel}>✓ Coupon Applied!</p>
-            <p className={styles.discountAmount}>
-              Save ${discountInfo.discount.toFixed(2)} - New Total: ${discountInfo.finalAmount.toFixed(2)}
-            </p>
+          <div className={styles.couponInputGroup}>
+            <input
+              id="coupon-code"
+              type="text"
+              className={styles.couponInput}
+              placeholder="Enter coupon code (Optional)"
+              value={couponCode}
+              onChange={(e) => {
+                const newCode = e.target.value.toUpperCase()
+                setCouponCode(newCode)
+                // Reset validation state when code changes
+                setCouponValidated(false)
+                setCouponError(null)
+                setDiscountInfo(null)
+                if (newCode.length >= 3) {
+                  trackEvent('enter_coupon_code', {
+                    analysis_id: analysisId || reportId || undefined
+                  })
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !isValidatingCoupon && couponCode.trim() && !isInitializing) {
+                  handleValidateCoupon()
+                }
+              }}
+              disabled={isInitializing || isValidatingCoupon}
+            />
+            <button
+              type="button"
+              className={styles.validateButton}
+              onClick={handleValidateCoupon}
+              disabled={isValidatingCoupon || !couponCode.trim() || isInitializing}
+            >
+              {isValidatingCoupon ? 'Validating...' : 'Validate'}
+            </button>
           </div>
-        )}
+          
+          {couponError && (
+            <p className={styles.couponError}>
+              ✗ {couponError}
+            </p>
+          )}
+          
+          {couponValidated && discountInfo && (
+            <div className={styles.couponSuccess}>
+              <p className={styles.couponSuccessText}>
+                ✓ Coupon applied! Save ${discountInfo.discount.toFixed(2)}
+              </p>
+              <p className={styles.couponNewPrice}>
+                New Price: ${discountInfo.finalAmount.toFixed(2)}
+              </p>
+            </div>
+          )}
+          
+          {!couponValidated && !couponError && (
+            <p className={styles.couponHint}>
+              Have a discount code? Enter it and click Validate to see your savings.
+            </p>
+          )}
+        </div>
         
         <p className={styles.initText}>
           Click the button below to proceed with payment
@@ -464,6 +574,7 @@ function PaymentForm({
           onClick={() => {
             trackEvent('click_proceed_to_payment', {
               has_coupon: !!couponCode,
+              coupon_validated: couponValidated,
               analysis_id: analysisId || reportId || undefined
             })
             handleInitializePayment()
@@ -476,7 +587,9 @@ function PaymentForm({
               Initializing payment...
             </>
           ) : (
-            discountInfo ? `Proceed to Payment - $${discountInfo.finalAmount.toFixed(2)}` : `Proceed to Payment - $${amount.toFixed(2)}`
+            discountInfo && couponValidated
+              ? `Proceed to Payment - $${discountInfo.finalAmount.toFixed(2)}`
+              : `Proceed to Payment - $${amount.toFixed(2)}`
           )}
         </button>
         {error && (
@@ -521,39 +634,41 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
   const [error, setError] = useState<string | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<BackendTransaction | null>(null)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
+  const [pageInput, setPageInput] = useState('1')
 
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
         setLoading(true)
         setError(null)
-        
         // Get Firebase auth token
         const auth = getFirebaseAuth()
         const currentUser = auth.currentUser
         if (!currentUser) {
           throw new Error('Not authenticated')
         }
-        
         const token = await currentUser.getIdToken()
-        
-        // Call backend API
+        // Call backend API with pagination
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/orders/transactions?limit=50&offset=0`, {
+        const offset = (currentPage - 1) * pageSize
+        const response = await fetch(`${apiUrl}/orders/transactions?limit=${pageSize}&offset=${offset}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         })
-
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
           throw new Error(errorData.detail || 'Failed to fetch transactions')
         }
-
         const data = await response.json()
         setTransactions(data.transactions || [])
-        console.log('[Transactions] Loaded transactions:', data.transactions?.length || 0)
+        setTotalCount(data.total_count || 0)
+        // Optionally: set statistics if needed
       } catch (err: any) {
         setError(err.message || 'Failed to load transactions')
         console.error('[Transactions] Error:', err)
@@ -561,11 +676,15 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
         setLoading(false)
       }
     }
-
     if (userId) {
       fetchTransactions()
     }
-  }, [userId])
+  }, [userId, currentPage, pageSize])
+
+  // Sync pageInput with currentPage when currentPage changes
+  useEffect(() => {
+    setPageInput(currentPage.toString())
+  }, [currentPage])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -625,7 +744,6 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
       </div>
     )
   }
-
   if (error) {
     return (
       <div className={styles.errorMessage}>
@@ -633,7 +751,6 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
       </div>
     )
   }
-
   if (transactions.length === 0) {
     return (
       <div className={styles.emptyState}>
@@ -644,107 +761,247 @@ function TransactionHistory({ userId, purpose }: { userId: string; purpose?: Pay
       </div>
     )
   }
-
+  const totalPages = Math.ceil(totalCount / pageSize)
   return (
-    <div className={styles.transactionsList}>
-      {transactions.map((transaction) => (
-        <div key={transaction.id} className={styles.transactionCard}>
-          <div className={styles.transactionHeader}>
-            <div className={styles.transactionInfo}>
-              <h4 className={styles.transactionId}>
-                {transaction.product_name || `Payment ${transaction.id.slice(-8)}`}
-              </h4>
-              <p className={styles.transactionDate}>{formatDate(transaction.created_at)}</p>
+    <div>
+      <div className={styles.transactionsList}>
+        {transactions.map((transaction) => (
+          <div key={transaction.id} className={styles.transactionCard}>
+            <div className={styles.transactionHeader}>
+              <div className={styles.transactionInfo}>
+                <h4 className={styles.transactionId}>
+                  {transaction.product_name || `Payment ${transaction.id.slice(-8)}`}
+                </h4>
+                <p className={styles.transactionDate}>{formatDate(transaction.created_at)}</p>
+              </div>
+              <div className={styles.transactionAmount}>
+                <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
+                <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
+                  {getStatusLabel(transaction.status)}
+                </span>
+              </div>
             </div>
-            <div className={styles.transactionAmount}>
-              <span className={styles.amount}>{formatCurrency(transaction.amount, transaction.currency)}</span>
-              <span className={`${styles.status} ${getStatusClass(transaction.status)}`}>
-                {getStatusLabel(transaction.status)}
+            <div className={styles.transactionBody}>
+              {transaction.coupon_code && (
+                <p className={styles.transactionProduct}>
+                  Coupon: <strong>{transaction.coupon_code}</strong> 
+                  {transaction.discount_amount > 0 && (
+                    <span> (Saved {formatCurrency(transaction.discount_amount, transaction.currency)})</span>
+                  )}
+                </p>
+              )}
+              {transaction.payment_method_type && (
+                <p className={styles.transactionDescription}>
+                  Payment Method: {transaction.card_brand ? transaction.card_brand.toUpperCase() : transaction.payment_method_type.toUpperCase()}
+                  {transaction.card_last4 && ` •••• ${transaction.card_last4}`}
+                </p>
+              )}
+
+            </div>
+            {transaction.status === 'succeeded' && (
+              <div className={styles.transactionActions}>
+                <button
+                  onClick={() => {
+                    setSelectedTransaction(transaction)
+                    setShowReceiptModal(true)
+                    trackEvent('view_transaction_details', {
+                      transaction_id: transaction.id,
+                      payment_intent_id: transaction.payment_intent_id,
+                      amount: transaction.amount,
+                      product_name: transaction.product_name || undefined
+                    })
+                  }}
+                  className={styles.receiptButton}
+                >
+                  View Details
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+        {showReceiptModal && selectedTransaction && (
+          <ReceiptModal
+            isOpen={showReceiptModal}
+            onClose={() => {
+              setShowReceiptModal(false)
+              setSelectedTransaction(null)
+            }}
+            transaction={{
+              id: selectedTransaction.id,
+              description: selectedTransaction.product_name || `Payment ${selectedTransaction.id.slice(-8)}`,
+              amount: selectedTransaction.amount,
+              currency: selectedTransaction.currency,
+              status: selectedTransaction.status as any,
+              createdAt: selectedTransaction.created_at,
+              productName: selectedTransaction.product_name,
+              paymentIntentId: selectedTransaction.payment_intent_id || '',
+              receiptUrl: selectedTransaction.receipt_url || null,
+              receiptNumber: selectedTransaction.receipt_number || undefined,
+              paymentMethod: selectedTransaction.payment_method_type ? {
+                type: selectedTransaction.payment_method_type,
+                card: selectedTransaction.card_brand && selectedTransaction.card_last4 ? {
+                  brand: selectedTransaction.card_brand,
+                  last4: selectedTransaction.card_last4
+                } : undefined
+              } : undefined
+            }}
+            purpose={purpose}
+          />
+        )}
+      </div>
+      {/* Pagination Controls */}
+      {!loading && transactions.length > 0 && (
+        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 6px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'nowrap', gap: '4px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '0 0 auto' }}>
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              style={{
+                padding: '2px 6px',
+                backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage === 1 ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '11px',
+                fontWeight: '500',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap',
+                minWidth: '40px'
+              }}
+            >
+              ⟨⟨
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '2px 6px',
+                backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage === 1 ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '11px',
+                fontWeight: '500',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap',
+                minWidth: '40px'
+              }}
+            >
+              ←
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '0 1 auto', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                Page
+              </span>
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={pageInput}
+                onChange={(e) => setPageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const page = Number(pageInput)
+                    if (page >= 1 && page <= totalPages) {
+                      setCurrentPage(page)
+                    } else if (page < 1) {
+                      setCurrentPage(1)
+                      setPageInput('1')
+                    } else if (page > totalPages) {
+                      setCurrentPage(totalPages)
+                      setPageInput(totalPages.toString())
+                    }
+                  }
+                }}
+                style={{
+                  width: '36px',
+                  padding: '2px 3px',
+                  border: '1px solid rgba(14, 165, 233, 0.2)',
+                  borderRadius: '5px',
+                  fontSize: '11px',
+                  textAlign: 'center'
+                }}
+              />
+              <span style={{ fontSize: '11px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                / {totalPages}
               </span>
             </div>
-          </div>
-          
-          <div className={styles.transactionBody}>
-            {transaction.product_name && (
-              <p className={styles.transactionProduct}>
-                Product: <strong>{transaction.product_name}</strong>
-              </p>
-            )}
-            {transaction.coupon_code && (
-              <p className={styles.transactionProduct}>
-                Coupon: <strong>{transaction.coupon_code}</strong> 
-                {transaction.discount_amount > 0 && (
-                  <span> (Saved {formatCurrency(transaction.discount_amount, transaction.currency)})</span>
-                )}
-              </p>
-            )}
-            {transaction.payment_method_type && (
-              <p className={styles.transactionDescription}>
-                Payment Method: {transaction.card_brand ? transaction.card_brand.toUpperCase() : transaction.payment_method_type.toUpperCase()}
-                {transaction.card_last4 && ` •••• ${transaction.card_last4}`}
-              </p>
-            )}
-            <p className={styles.transactionDescription}>
-              Payment ID: {transaction.payment_intent_id || transaction.id}
-            </p>
-            {transaction.receipt_number && (
-              <p className={styles.transactionDescription}>
-                Receipt: {transaction.receipt_number}
-              </p>
-            )}
-          </div>
-
-          {transaction.status === 'succeeded' && (
-            <div className={styles.transactionActions}>
-              <button
-                onClick={() => {
-                  setSelectedTransaction(transaction)
-                  setShowReceiptModal(true)
-                  trackEvent('view_transaction_details', {
-                    transaction_id: transaction.id,
-                    payment_intent_id: transaction.payment_intent_id,
-                    amount: transaction.amount,
-                    product_name: transaction.product_name || undefined
-                  })
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                Per page:
+              </label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value))
+                  setCurrentPage(1)
                 }}
-                className={styles.receiptButton}
+                style={{
+                  padding: '2px 3px',
+                  border: '1px solid rgba(14, 165, 233, 0.2)',
+                  borderRadius: '5px',
+                  fontSize: '11px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer',
+                  minWidth: '40px'
+                }}
               >
-                View Details
-              </button>
-            
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
             </div>
-          )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '0 0 auto' }}>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage >= totalPages}
+              style={{
+                padding: '2px 6px',
+                backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '11px',
+                fontWeight: '500',
+                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap',
+                minWidth: '40px'
+              }}
+            >
+              →
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages}
+              style={{
+                padding: '2px 6px',
+                backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '11px',
+                fontWeight: '500',
+                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap',
+                minWidth: '40px'
+              }}
+            >
+              ⟩⟩
+            </button>
+          </div>
         </div>
-      ))}
-      
-      {showReceiptModal && selectedTransaction && (
-        <ReceiptModal
-          isOpen={showReceiptModal}
-          onClose={() => {
-            setShowReceiptModal(false)
-            setSelectedTransaction(null)
-          }}
-          transaction={{
-            id: selectedTransaction.id,
-            description: selectedTransaction.product_name || `Payment ${selectedTransaction.id.slice(-8)}`,
-            amount: selectedTransaction.amount,
-            currency: selectedTransaction.currency,
-            status: selectedTransaction.status as any,
-            createdAt: selectedTransaction.created_at,
-            productName: selectedTransaction.product_name,
-            paymentIntentId: selectedTransaction.payment_intent_id || '',
-            receiptUrl: selectedTransaction.receipt_url || null,
-            receiptNumber: selectedTransaction.receipt_number || undefined,
-            paymentMethod: selectedTransaction.payment_method_type ? {
-              type: selectedTransaction.payment_method_type,
-              card: selectedTransaction.card_brand && selectedTransaction.card_last4 ? {
-                brand: selectedTransaction.card_brand,
-                last4: selectedTransaction.card_last4
-              } : undefined
-            } : undefined
-          }}
-          purpose={purpose}
-        />
       )}
     </div>
   )

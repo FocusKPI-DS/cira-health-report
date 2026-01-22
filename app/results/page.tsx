@@ -9,7 +9,7 @@ import PHADetailsModal from '@/components/PHADetailsModal'
 import GenerateWorkflowModal from '@/components/GenerateWorkflowModal'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
 import PaymentModal from '@/components/PaymentModal'
-import { InfoIcon, DownloadIcon } from '@/components/Icons'
+import { InfoIcon, DownloadIcon, DocumentGenerateIcon } from '@/components/Icons'
 import { useAuth } from '@/lib/auth'
 import { analysisApi } from '@/lib/analysis-api'
 import { trackEvent } from '@/lib/analytics'
@@ -715,7 +715,7 @@ function ResultsContent() {
               <h1 className={styles.title}>{productName || 'PHA Analysis Draft'}</h1>
               {user && automaticSettingsEnabled && (
                 <button 
-                  className={styles.downloadButton} 
+                  className={styles.generateWholeReportButton} 
                   onClick={handleGenerateWholeReport}
                   disabled={!!progressData}
                   style={{
@@ -723,7 +723,7 @@ function ResultsContent() {
                     cursor: progressData ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  <DownloadIcon />
+                  <DocumentGenerateIcon />
                   {progressData ? 'Generating...' : 'Generate Whole Report'}
                 </button>
               )}
