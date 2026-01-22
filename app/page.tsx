@@ -7,6 +7,7 @@ import Header from '@/components/Header'
 import AddDatasourceModal from '@/components/AddDatasourceModal'
 import { LightningIcon, RobotIcon, ChartIcon, ClipboardIcon, TagIcon, RefreshIcon, CheckIcon } from '@/components/Icons'
 import { trackEvent } from '@/lib/analytics'
+import { useAuth } from '@/lib/auth'
 
 export default function Home() {
   const router = useRouter()
@@ -18,6 +19,7 @@ export default function Home() {
     email: '',
     message: ''
   })
+  const { user, isAnonymous } = useAuth()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,7 +39,10 @@ export default function Home() {
 
   return (
     <main className={styles.main} style={{ flex: 1 }}>
-      <Header showAuthButtons={true} showNavMenu={true} />
+      <Header 
+        showAuthButtons={!user || isAnonymous} 
+        showUserMenu={!!(user && !isAnonymous)} 
+      />
       <div id="hero" className={styles.hero}>
         <div className={styles.heroContent}>
           <h1 className={styles.title}>
