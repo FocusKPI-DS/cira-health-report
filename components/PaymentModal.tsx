@@ -557,11 +557,7 @@ function PaymentForm({
             </div>
           )}
           
-          {!couponValidated && !couponError && (
-            <p className={styles.couponHint}>
-              Have a discount code? Enter it and click Validate to see your savings.
-            </p>
-          )}
+
         </div>
         
         <p className={styles.initText}>
@@ -1080,11 +1076,6 @@ export default function PaymentModal({
         </div>
 
         <div className={styles.modalContent}>
-          <div className={styles.priceSection}>
-            <div className={styles.priceLabel}>Total</div>
-            <div className={styles.priceAmount}>${amount.toFixed(2)}</div>
-          </div>
-
           {/* Tabs */}
           <div className={styles.tabs}>
             <button
@@ -1116,7 +1107,12 @@ export default function PaymentModal({
           {/* Tab Content */}
           <div className={styles.tabContent}>
             {activeTab === 'payment' ? (
-              <PaymentForm
+              <>
+                <div className={styles.priceSection}>
+                  <div className={styles.priceLabel}>Total</div>
+                  <div className={styles.priceAmount}>${amount.toFixed(2)}</div>
+                </div>
+                <PaymentForm
                 onSuccess={onSuccess}
                 onClose={onClose}
                 reportId={reportId}
@@ -1125,6 +1121,7 @@ export default function PaymentModal({
                 amount={amount}
                 onProcessingChange={setIsPaymentProcessing}
               />
+              </>
             ) : (
               user ? (
                 <TransactionHistory userId={user.uid} purpose={purpose} />

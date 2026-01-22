@@ -7,13 +7,14 @@
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(8px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: 3rem 1rem 1rem 1rem;
 }
 
 .modal {
+  margin-top: 2rem;
   background: white;
   border-radius: 12px;
   padding: 0;

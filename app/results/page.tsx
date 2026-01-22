@@ -784,10 +784,11 @@ function ResultsContent() {
             )}
 
             {/* Filter and Search Controls - Always visible */}
-            {!isLoadingHazards && (
+            {!isLoadingHazards && !isGenerating && (
               <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
                   {/* Search Input */}
+                  {progressData ? "True": "False"}
                   <div style={{ flex: '1', minWidth: '200px' }}>
                     <input
                       type="text"
@@ -796,6 +797,7 @@ function ResultsContent() {
                         setSearchInput(e.target.value)
                       }}
                       placeholder="Search hazards, harms..."
+                      disabled={progressData !== null}
                       style={{
                         width: '100%',
                         padding: '6px 10px',
@@ -818,6 +820,7 @@ function ResultsContent() {
                         setSeverityLevel(e.target.value)
                         setCurrentPage(1)
                       }}
+                      disabled={progressData !== null}
                       style={{
                         width: '100%',
                         padding: '6px 10px',
