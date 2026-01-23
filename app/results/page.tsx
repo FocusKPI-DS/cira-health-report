@@ -73,6 +73,11 @@ function ResultsContent() {
   const [isLoadingReports, setIsLoadingReports] = useState(true)
   const [isLoadingHazards, setIsLoadingHazards] = useState(true)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
+  const analysisIdRef = useRef<string | null>(null)
+    // Always keep analysisIdRef in sync with latest analysisId
+    useEffect(() => {
+      analysisIdRef.current = analysisId;
+    }, [analysisId]);
   const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
   const [shouldRestart, setShouldRestart] = useState<boolean>(false)
   const [hasTriggeredRestart, setHasTriggeredRestart] = useState<boolean>(false)
@@ -138,6 +143,13 @@ function ResultsContent() {
 
     const pollStatus = async () => {
       try {
+        // Use ref to check latest analysisId
+        if (analysisIdRef.current !== analysisIdToMonitor) {
+          console.log(`[Results] ⚠️  Race condition detected: Polling for outdated analysis (${analysisIdToMonitor}), current active analysis is (${analysisIdRef.current}). Discarding polling response.`);
+          stopPolling();
+          return;
+        }
+
         const response = await analysisApi.getAnalysisResults(
           analysisIdToMonitor,
           currentPage,
@@ -146,6 +158,13 @@ function ResultsContent() {
           searchKeyword
         );
         console.log('[Results] Polling status:', response.status);
+
+        // Double-check again after API call to prevent race condition
+        if (analysisIdRef.current !== analysisIdToMonitor) {
+          console.log(`[Results] ⚠️  Race condition detected: API response for outdated analysis (${analysisIdToMonitor}), but user switched to (${analysisIdRef.current}). Discarding response.`);
+          stopPolling();
+          return;
+        }
 
         // Update table data and pagination info from polling response
         setCurrentHazards(response.results || []);
@@ -181,8 +200,11 @@ function ResultsContent() {
         }
       } catch (error) {
         console.error('[Results] Error polling status:', error);
-        setIsGenerating(false);
-        setProgressData(null);
+        // Only clear state if this polling is still for the current analysis
+        if (analysisIdRef.current === analysisIdToMonitor) {
+          setIsGenerating(false);
+          setProgressData(null);
+        }
         stopPolling();
       }
     };
@@ -267,19 +289,24 @@ function ResultsContent() {
   useEffect(() => {
     const fetchHazardData = async () => {
       if (!analysisId) return
-      
+
+      // Use ref to track latest analysisId
+      const currentAnalysisId = analysisId
+
       // Stop any existing polling when switching to a different analysis
       stopPolling()
-      
+
       setIsLoadingHazards(true)
       try {
-        console.log('[Results] Fetching hazard data for analysis_id:', analysisId, 'page:', currentPage, 'pageSize:', pageSize, 'severity:', severityLevel, 'search:', searchKeyword)
-        const response = await analysisApi.getAnalysisResults(analysisId, currentPage, pageSize, severityLevel, searchKeyword)
-        //console.log('[Results] Fetched results:', response)
-        //console.log('[Results] Results array:', response.results)
-        if (response.results && response.results.length > 0) {
-          console.log('[Results] First hazard structure:', JSON.stringify(response.results[0], null, 2))
+        console.log('[Results] Fetching hazard data for analysis_id:', currentAnalysisId, 'page:', currentPage, 'pageSize:', pageSize, 'severity:', severityLevel, 'search:', searchKeyword)
+        const response = await analysisApi.getAnalysisResults(currentAnalysisId, currentPage, pageSize, severityLevel, searchKeyword)
+
+        // Check if user has switched to a different analysis while we were fetching
+        if (analysisIdRef.current !== currentAnalysisId) {
+          console.log(`[Results] ⚠️  Race condition detected: Fetch response for outdated analysis (${currentAnalysisId}), but user switched to (${analysisIdRef.current}). Discarding response.`)
+          return
         }
+
         setCurrentHazards(response.results || [])
         setTotalPages(response.total_pages || 1)
         setTotalHazards(response.total || 0)
@@ -297,17 +324,17 @@ function ResultsContent() {
           })
           // Start polling if not already polling
           if (!pollingTimerRef.current) {
-            startPolling(analysisId)
+            startPolling(currentAnalysisId)
           }
         } else {
           console.log('[Results] Analysis completed or not generating')
           setProgressData(null)
           stopPolling()
         }
-        
+
         // Fetch filter settings to check automatic_settings_enabled
         try {
-          const filters = await analysisApi.getAnalysisFilters(analysisId)
+          const filters = await analysisApi.getAnalysisFilters(currentAnalysisId)
           console.log('[Results] Fetched filters:', filters)
           setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
         } catch (filterError) {
@@ -316,9 +343,15 @@ function ResultsContent() {
         }
       } catch (error) {
         console.error('[Results] Error fetching hazard data:', error)
-        setCurrentHazards([])
+        // Only clear if still fetching this same analysis
+        if (analysisIdRef.current === currentAnalysisId) {
+          setCurrentHazards([])
+        }
       } finally {
-        setIsLoadingHazards(false)
+        // Only stop loading if we're still on this analysis
+        if (analysisIdRef.current === currentAnalysisId) {
+          setIsLoadingHazards(false)
+        }
       }
     }
     
@@ -339,7 +372,6 @@ function ResultsContent() {
     try {
       console.log('[Results] Fetching report list...')
       const analyses = await analysisApi.fetchReportList()
-      console.log('[Results] Received analyses:', analyses)
       
       const formattedReports: Report[] = analyses.map((analysis: any) => ({
         id: analysis.analysis_id,
@@ -348,7 +380,6 @@ function ResultsContent() {
         createdAt: analysis.completed_at ? new Date(analysis.completed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         hazardCount: analysis.hazard_count || 0
       }))
-      console.log('[Results] Formatted reports:', formattedReports)
       setReport_list(formattedReports)
     } catch (error) {
       console.error('[Results] Error fetching report list:', error)
