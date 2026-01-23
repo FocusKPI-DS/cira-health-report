@@ -441,6 +441,14 @@ function ResultsContent() {
       product_name: report.productName
     })
     
+    // 清空右边数据，然后等待API加载新数据
+    setCurrentHazards([])
+    setTotalHazards(0)
+    setTotalRecords(0)
+    setTotalPages(1)
+    setCurrentPage(1)
+    setProgressData(null)
+    
     router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
   }
 
@@ -825,7 +833,6 @@ function ResultsContent() {
               <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
                   {/* Search Input */}
-                  {progressData ? "True": "False"}
                   <div style={{ flex: '1', minWidth: '200px' }}>
                     <input
                       type="text"
