@@ -94,6 +94,8 @@ function ResultsContent() {
   const [searchInput, setSearchInput] = useState('')
   const [pageInput, setPageInput] = useState('')
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const fetchHazardDataRef = useRef<(() => Promise<void>) | null>(null)
+  const fetchReportListDataRef = useRef<(() => Promise<void>) | null>(null)
 
   const formatDate = (dateString: string) => {
     try {
@@ -149,8 +151,12 @@ function ResultsContent() {
           stopPolling();
 
           // Dynamically update the UI instead of reloading the page
-          fetchReportListData(); // Refresh the left-side report list
-          fetchHazardData(); // Refresh the right-side hazard details
+          if (fetchReportListDataRef.current) {
+            fetchReportListDataRef.current();
+          }
+          if (fetchHazardDataRef.current) {
+            fetchHazardDataRef.current();
+          }
         } else {
           // Update progress data
           setProgressData({
@@ -304,6 +310,9 @@ function ResultsContent() {
       }
     }
     
+    // Store the function reference for use in polling
+    fetchHazardDataRef.current = fetchHazardData
+    
     fetchHazardData()
     
     // Cleanup: stop polling when component unmounts or dependencies change
@@ -342,6 +351,9 @@ function ResultsContent() {
 
   // Fetch report list from API when user is available
   useEffect(() => {
+    // Store the function reference for use in polling
+    fetchReportListDataRef.current = fetchReportListData
+    
     fetchReportListData()
   }, [user, authLoading])
 

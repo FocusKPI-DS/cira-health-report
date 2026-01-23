@@ -40,13 +40,13 @@ export default function Home() {
   }
 
   // Add styles for success and error messages
-  const messageStyle = (isError: boolean) => ({
+  const messageStyle = (isError: boolean): React.CSSProperties => ({
     backgroundColor: isError ? '#f8d7da' : '#d4edda',
     color: isError ? '#721c24' : '#155724',
     padding: '10px',
     borderRadius: '5px',
     marginTop: '10px',
-    textAlign: 'center',
+    textAlign: 'center' as const,
   })
 
   return (
