@@ -491,15 +491,35 @@ function ResultsContent() {
       product_name: report.productName
     })
     
-    // 清空右边数据，然后等待API加载新数据
-    setCurrentHazards([])
-    setTotalHazards(0)
-    setTotalRecords(0)
-    setTotalPages(1)
-    setCurrentPage(1)
-    setProgressData(null)
+    // Check if clicking the same report
+    const isSameReport = analysisId === report.id
     
-    router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
+    if (isSameReport) {
+      // If same report, just refresh the data without navigation
+      console.log('[Results] Same report clicked, refreshing data')
+      setCurrentHazards([])
+      setTotalHazards(0)
+      setTotalRecords(0)
+      setTotalPages(1)
+      setCurrentPage(1)
+      setProgressData(null)
+      setIsLoadingHazards(true)
+      
+      // Force re-fetch by temporarily clearing and re-setting analysisId
+      setAnalysisId(null)
+      setTimeout(() => setAnalysisId(report.id), 0)
+    } else {
+      // Different report, navigate normally
+      // 清空右边数据，然后等待API加载新数据
+      setCurrentHazards([])
+      setTotalHazards(0)
+      setTotalRecords(0)
+      setTotalPages(1)
+      setCurrentPage(1)
+      setProgressData(null)
+      
+      router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
+    }
   }
 
   // Show hazards from currentHazards if available (from API), otherwise show empty
@@ -833,14 +853,14 @@ function ResultsContent() {
                 <button 
                   className={styles.generateWholeReportButton} 
                   onClick={handleGenerateWholeReport}
-                  disabled={!!progressData}
+                  disabled={!!progressData || isLoadingHazards}
                   style={{
-                    opacity: progressData ? 0.6 : 1,
-                    cursor: progressData ? 'not-allowed' : 'pointer'
+                    opacity: (progressData || isLoadingHazards) ? 0.6 : 1,
+                    cursor: (progressData || isLoadingHazards) ? 'not-allowed' : 'pointer'
                   }}
                 >
                   <DocumentGenerateIcon />
-                  {progressData ? 'Generating...' : 'Generate Whole Report'}
+                  {progressData ? 'Generating...' : isLoadingHazards ? 'Loading...' : 'Generate Whole Report'}
                 </button>
               )}
               {user && !automaticSettingsEnabled && !isGenerating && (
