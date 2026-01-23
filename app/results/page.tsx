@@ -76,6 +76,7 @@ function ResultsContent() {
   const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
   const [shouldRestart, setShouldRestart] = useState<boolean>(false)
   const [hasTriggeredRestart, setHasTriggeredRestart] = useState<boolean>(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [progressData, setProgressData] = useState<{
     totalDetailRecords: number
     planTotalRecords: number
@@ -226,6 +227,9 @@ function ResultsContent() {
   }, [currentPage])
 
   useEffect(() => {
+    // Prevent state updates during download
+    if (isDownloading) return
+    
     const product = searchParams.get('productName') || ''
     const use = searchParams.get('intendedUse') || ''
     const generatingParam = searchParams.get('generating')
@@ -257,7 +261,7 @@ function ResultsContent() {
         router.replace(`/results?${params.toString()}`)
       }, 3000) // Show generating state for 3 seconds
     }
-  }, [searchParams, router])
+  }, [searchParams, router, isDownloading])
 
   // Fetch hazard data when analysisId is available
   useEffect(() => {
@@ -445,6 +449,12 @@ function ResultsContent() {
   }, [report_list, isLoadingReports, analysisId, router])
 
   const handleViewReport = (report: Report) => {
+    // Prevent navigation during download
+    if (isDownloading) {
+      alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
+      return
+    }
+    
     trackEvent('view_report_modal', {
       analysis_id: report.id,
       product_name: report.productName
@@ -580,6 +590,7 @@ function ResultsContent() {
     }
 
     try {
+      setIsDownloading(true)
       // Check analysis status before downloading
       console.log('[Results] Checking analysis status before download:', analysisId)
       const statusResponse = await analysisApi.getAnalysisResults(analysisId, 1, 1)
@@ -595,6 +606,8 @@ function ResultsContent() {
     } catch (error) {
       console.error('[Results] Error in download flow:', error)
       alert('Failed to process download. Please try again.')
+    } finally {
+      setIsDownloading(false)
     }
   }
 
@@ -701,24 +714,42 @@ function ResultsContent() {
                 <div className={styles.buttonGroup}>
                   <button 
                     className={styles.generateButton}
+                    disabled={isDownloading}
                     onClick={() => {
+                      if (isDownloading) {
+                        alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
+                        return
+                      }
                       trackEvent('re_click_generate_new_report', {
                         page: 'results',
                         analysis_id: analysisId || undefined
                       })
                       setShowGenerateModal(true)
                     }}
+                    style={{
+                      opacity: isDownloading ? 0.6 : 1,
+                      cursor: isDownloading ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     Generate New Report
                   </button>
                   <button 
                     className={styles.addDatasourceButton}
+                    disabled={isDownloading}
                     onClick={() => {
+                      if (isDownloading) {
+                        alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
+                        return
+                      }
                       trackEvent('re_click_add_datasource', {
                         page: 'results',
                         analysis_id: analysisId || undefined
                       })
                       setShowAddDatasourceModal(true)
+                    }}
+                    style={{
+                      opacity: isDownloading ? 0.6 : 1,
+                      cursor: isDownloading ? 'not-allowed' : 'pointer'
                     }}
                   >
                     Add Datasource
@@ -782,15 +813,23 @@ function ResultsContent() {
                 </button>
               )}
               {user && !automaticSettingsEnabled && !isGenerating && (
-                <button className={styles.downloadButton} onClick={() => {
-                  trackEvent('re_click_download_full_report', {
-                    analysis_id: analysisId || undefined,
-                    product_name: productName || undefined
-                  })
-                  handleDownload()
-                }}>
+                <button 
+                  className={styles.downloadButton} 
+                  onClick={() => {
+                    trackEvent('re_click_download_full_report', {
+                      analysis_id: analysisId || undefined,
+                      product_name: productName || undefined
+                    })
+                    handleDownload()
+                  }}
+                  disabled={isDownloading}
+                  style={{
+                    opacity: isDownloading ? 0.6 : 1,
+                    cursor: isDownloading ? 'not-allowed' : 'pointer'
+                  }}
+                >
                   <DownloadIcon />
-                  Download Full Report
+                  {isDownloading ? 'Downloading...' : 'Download Full Report'}
                 </button>
               )}
             </div>
