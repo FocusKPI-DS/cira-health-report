@@ -70,8 +70,8 @@ function ResultsContent() {
   const [showAddDatasourceModal, setShowAddDatasourceModal] = useState(false)
   const [currentHazards, setCurrentHazards] = useState<Hazard[]>([])
   const [report_list, setReport_list] = useState<Report[]>([])
-  const [isLoadingReports, setIsLoadingReports] = useState(false)
-  const [isLoadingHazards, setIsLoadingHazards] = useState(false)
+  const [isLoadingReports, setIsLoadingReports] = useState(true)
+  const [isLoadingHazards, setIsLoadingHazards] = useState(true)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
   const [shouldRestart, setShouldRestart] = useState<boolean>(false)
@@ -331,8 +331,6 @@ function ResultsContent() {
 
   // Function to fetch report list
   const fetchReportListData = async () => {
-    if (!user || authLoading) return
-    
     setIsLoadingReports(true)
     try {
       console.log('[Results] Fetching report list...')
@@ -362,8 +360,11 @@ function ResultsContent() {
     // Store the function reference for use in polling
     fetchReportListDataRef.current = fetchReportListData
     
+    // Fetch as soon as user is available (Firebase auth complete)
+    if (!user) return
+    
     fetchReportListData()
-  }, [user, authLoading])
+  }, [user])
 
   // Auto-trigger restart if restart=1 parameter is present
   useEffect(() => {
