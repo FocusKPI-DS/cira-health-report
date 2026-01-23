@@ -64,6 +64,17 @@ export default function InvoicesPage() {
     total_transactions: number
   } | null>(null)
 
+  // Get auth state
+  const { loading: authLoading, isAnonymous } = useAuth()
+
+  // Authentication check - redirect if anonymous
+  useEffect(() => {
+    if (!authLoading && isAnonymous) {
+      alert('Please log in to access the Invoices page')
+      router.push('/')
+    }
+  }, [authLoading, isAnonymous, router])
+
   useEffect(() => {
     const fetchTransactions = async () => {
       if (!user) {

@@ -97,6 +97,14 @@ function ResultsContent() {
   const fetchHazardDataRef = useRef<(() => Promise<void>) | null>(null)
   const fetchReportListDataRef = useRef<(() => Promise<void>) | null>(null)
 
+  // Authentication check - redirect if anonymous
+  useEffect(() => {
+    if (!authLoading && isAnonymous) {
+      alert('Please log in to access the Results page')
+      router.push('/')
+    }
+  }, [authLoading, isAnonymous, router])
+
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
@@ -732,13 +740,13 @@ function ResultsContent() {
                         className={`${styles.historyItem} ${analysisId === report.id ? styles.active : ''}`}
                         onClick={() => handleViewReport(report)}
                       >
-                        <div className={styles.historyItemHeader}>
+                        <div className={styles.historyItemHeader} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span className={styles.historyItemName}>{report.productName}</span>
+                          <span className={styles.historyItemHazards} style={{ marginLeft: 'auto' }}>{formatDate(report.createdAt)}</span>
                         </div>
                         {report.productCodes && report.productCodes.length > 0 && (
                           <p className={styles.historyItemDesc}>{report.productCodes.join(', ')}</p>
                         )}
-                        <span className={styles.historyItemHazards}>{report.hazardCount} Hazards • {formatDate(report.createdAt)}</span>
                       </button>
                     ))
                   )}
