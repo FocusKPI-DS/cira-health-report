@@ -636,9 +636,18 @@ function ResultsContent() {
     setShowPHADetailsModal(true)
   }
 
+  // Add a click handler for the "Go To Enterprise Version" button
+  const handleGoToEnterpriseVersion = () => {
+    router.push('/#contact-us'); // Redirect to the homepage with the Contact Us anchor
+  }
+
   return (
     <main className={styles.main} style={{ flex: 1 }}>
-      <Header showAuthButtons={!user || isAnonymous} showUserMenu={!!(user && !isAnonymous)} />
+      <Header 
+        showAuthButtons={!user || isAnonymous} 
+        showUserMenu={!!(user && !isAnonymous)}
+        
+      />
       <div className={`${styles.pageContent} ${!isSidebarExpanded ? styles.pageContentCollapsed : ''}`}>
         <div className={`${styles.sidebarWrapper} ${!isSidebarExpanded ? styles.sidebarWrapperCollapsed : ''}`}>
           <div className={`${styles.sidebar} ${!isSidebarExpanded ? styles.sidebarCollapsed : ''}`}>

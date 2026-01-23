@@ -20,6 +20,8 @@ export default function Home() {
     message: ''
   })
   const { user, isAnonymous } = useAuth()
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState<{ text: string, isError: boolean } | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,6 +38,16 @@ export default function Home() {
     // Navigate to login or show login modal
     router.push('/login')
   }
+
+  // Add styles for success and error messages
+  const messageStyle = (isError: boolean) => ({
+    backgroundColor: isError ? '#f8d7da' : '#d4edda',
+    color: isError ? '#721c24' : '#155724',
+    padding: '10px',
+    borderRadius: '5px',
+    marginTop: '10px',
+    textAlign: 'center',
+  })
 
   return (
     <main className={styles.main} style={{ flex: 1 }}>
@@ -290,15 +302,39 @@ export default function Home() {
           </div>
           
           <div className={styles.contactContent}>
-            <form className={styles.contactForm} onSubmit={(e) => {
+            <form className={styles.contactForm} onSubmit={async (e) => {
               e.preventDefault()
-              // Handle form submission here
-              console.log('Contact form submitted:', contactForm)
-              alert('Thank you for your message! We will get back to you soon.')
-              setContactForm({ name: '', email: '', message: '' })
+              setSubmitting(true)
+              setMessage(null)
+
+              try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+                const token = user ? await user.getIdToken() : null
+
+                const response = await fetch(`${apiUrl}/api/v1/anonclient/contactus/add`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                  },
+                  body: JSON.stringify(contactForm)
+                })
+
+                if (response.ok) {
+                  setMessage({ text: 'Thank you for your message! We will get back to you soon.', isError: false })
+                  setContactForm({ name: '', email: '', message: '' })
+                } else {
+                  const errorData = await response.json()
+                  setMessage({ text: `Failed to submit: ${errorData.detail}`, isError: true })
+                }
+              } catch (error) {
+                setMessage({ text: 'An error occurred while submitting your message. Please try again later.', isError: true })
+              } finally {
+                setSubmitting(false)
+                setTimeout(() => setMessage(null), 5000)
+              }
             }}>
               <div className={styles.formGroup}>
-                <label htmlFor="name" className={styles.formLabel}>Name</label>
                 <input
                   type="text"
                   id="name"
@@ -309,7 +345,6 @@ export default function Home() {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label htmlFor="email" className={styles.formLabel}>Email</label>
                 <input
                   type="email"
                   id="email"
@@ -320,7 +355,6 @@ export default function Home() {
                 />
               </div>
               <div className={styles.formGroup}>
-                <label htmlFor="message" className={styles.formLabel}>Message</label>
                 <textarea
                   id="message"
                   className={styles.formTextarea}
@@ -330,9 +364,11 @@ export default function Home() {
                   required
                 />
               </div>
-              <button type="submit" className={styles.contactSubmitButton}>
-                Send Message
-                <span className={styles.arrow}>→</span>
+              {message && (
+                <div style={messageStyle(message.isError)}>{message.text}</div>
+              )}
+              <button type="submit" className={styles.contactSubmitButton} disabled={submitting}>
+                {submitting ? 'Submitting' : 'Send Message'}
               </button>
             </form>
           </div>

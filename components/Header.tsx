@@ -21,10 +21,8 @@ export default function Header({ showAuthButtons = true, showUserMenu = false, s
   }
 
   const handleGoToEnterprise = () => {
-    const enterpriseUrl = process.env.NEXT_PUBLIC_CIRA_FRONTEND_URL
-    if (enterpriseUrl) {
-      window.location.href = enterpriseUrl
-    }
+    const homepageUrl = '/#contact';
+    window.location.href = homepageUrl;
   }
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
