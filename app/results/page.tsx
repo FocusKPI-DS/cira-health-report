@@ -159,6 +159,7 @@ function ResultsContent() {
       } catch (error) {
         console.error('[Results] Error polling status:', error)
         setIsGenerating(false)
+        setProgressData(null)
         stopPolling()
       }
     }
@@ -228,6 +229,7 @@ function ResultsContent() {
       // Remove the generating param from URL after a delay
       setTimeout(() => {
         setIsGenerating(false)
+        setProgressData(null)
         const params = new URLSearchParams(searchParams.toString())
         params.delete('generating')
         router.replace(`/results?${params.toString()}`)
@@ -727,7 +729,7 @@ function ResultsContent() {
                   {progressData ? 'Generating...' : 'Generate Whole Report'}
                 </button>
               )}
-              {user && !automaticSettingsEnabled && (
+              {user && !automaticSettingsEnabled && !isGenerating && (
                 <button className={styles.downloadButton} onClick={() => {
                   trackEvent('re_click_download_full_report', {
                     analysis_id: analysisId || undefined,
