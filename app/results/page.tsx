@@ -121,28 +121,36 @@ function ResultsContent() {
 
   // Start polling for analysis status
   const startPolling = (analysisIdToMonitor: string) => {
-    stopPolling() // Clear any existing polling first
-    
-    console.log('[Results] Starting polling for analysis:', analysisIdToMonitor)
-    
+    stopPolling(); // Clear any existing polling first
+
+    console.log('[Results] Starting polling for analysis:', analysisIdToMonitor);
+
     const pollStatus = async () => {
       try {
-        const response = await analysisApi.getAnalysisResults(analysisIdToMonitor, currentPage, pageSize, severityLevel, searchKeyword)
-        console.log('[Results] Polling status:', response.status)
-        
+        const response = await analysisApi.getAnalysisResults(
+          analysisIdToMonitor,
+          currentPage,
+          pageSize,
+          severityLevel,
+          searchKeyword
+        );
+        console.log('[Results] Polling status:', response.status);
+
         // Update table data and pagination info from polling response
-        setCurrentHazards(response.results || [])
-        setTotalPages(response.total_pages || 1)
-        setTotalHazards(response.total || 0)
-        setTotalRecords(response.total_records || 0)
-        
+        setCurrentHazards(response.results || []);
+        setTotalPages(response.total_pages || 1);
+        setTotalHazards(response.total || 0);
+        setTotalRecords(response.total_records || 0);
+
         if (response.status !== 'Generating') {
-          console.log('[Results] Analysis completed, stopping polling')
-          setIsGenerating(false)
-          setProgressData(null)
-          stopPolling()
-          // Reload to show new results
-          window.location.reload()
+          console.log('[Results] Analysis completed, stopping polling');
+          setIsGenerating(false);
+          setProgressData(null);
+          stopPolling();
+
+          // Dynamically update the UI instead of reloading the page
+          fetchReportListData(); // Refresh the left-side report list
+          fetchHazardData(); // Refresh the right-side hazard details
         } else {
           // Update progress data
           setProgressData({
@@ -151,21 +159,21 @@ function ResultsContent() {
             progressPercentage: response.progress_percentage || 0,
             aiCurrentCount: response.ai_current_count || 0,
             aiTotalRecords: response.ai_total_records || 0,
-            aiProgressPercentage: response.ai_progress_percentage || 0
-          })
+            aiProgressPercentage: response.ai_progress_percentage || 0,
+          });
           // Continue polling
-          pollingTimerRef.current = setTimeout(pollStatus, 7000)
+          pollingTimerRef.current = setTimeout(pollStatus, 7000);
         }
       } catch (error) {
-        console.error('[Results] Error polling status:', error)
-        setIsGenerating(false)
-        setProgressData(null)
-        stopPolling()
+        console.error('[Results] Error polling status:', error);
+        setIsGenerating(false);
+        setProgressData(null);
+        stopPolling();
       }
-    }
-    
+    };
+
     // Start first poll after 2 seconds
-    pollingTimerRef.current = setTimeout(pollStatus, 2000)
+    pollingTimerRef.current = setTimeout(pollStatus, 2000);
   }
 
   // Debounce search input to avoid API calls on every keystroke
@@ -565,11 +573,17 @@ function ResultsContent() {
     trackEvent('re_click_generate_whole_report', {
       analysis_id: analysisId || undefined,
       product_name: productName || undefined
-    })
+    });
     
-    // Check if payment has been made for this analysis before generating
-    const hasPaid = await checkPaymentForGeneration()
-    
+    // 清空右侧进度条和详情显示区域
+    setProgressData(null);
+    setCurrentHazards([]);
+    setTotalHazards(0);
+    setTotalRecords(0);
+
+    // 检查是否已支付
+    const hasPaid = await checkPaymentForGeneration();
+
     if (hasPaid) {
       // Payment found, proceed with generation
       console.log('[Results] Payment verified, proceeding with generation')

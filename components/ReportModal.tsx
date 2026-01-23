@@ -58,6 +58,8 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
         params.append('analysis_id', analysisId)
       }
       params.append('restart','1')
+
+
       router.push(`/results?${params.toString()}`)
     }
   }

@@ -11,9 +11,10 @@ interface GenerateWorkflowModalProps {
   onClose: () => void
   onComplete?: (productName: string, intendedUse: string, hazards: Hazard[], analysisId: string) => void
   onStartSuccess?: (analysisId: string, productName: string, intendedUse: string) => void
+  onClearState?: () => void // 添加清空状态的回调函数
 }
 
-export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onStartSuccess }: GenerateWorkflowModalProps) {
+export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onStartSuccess, onClearState }: GenerateWorkflowModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   const workflow = useGenerateWorkflow({ 
@@ -26,8 +27,13 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
       // Reset state when modal opens
       workflow.reset()
       setIsSubmitting(false)
+
+      // 清空右侧进度条和详情显示区域
+      if (onClearState) {
+        onClearState()
+      }
     }
-  }, [isOpen])
+  }, [isOpen, onClearState])
 
   // Handler for generating report - now always free, no payment check
   const handleGenerateReport = async () => {
@@ -39,6 +45,10 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
       await workflow.startAnalysisGeneration()
     } finally {
       setIsSubmitting(false)
+      // 清空右侧进度条和详情显示区域
+      if (onClearState) {
+        onClearState()
+      }
     }
   }
 
