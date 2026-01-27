@@ -82,8 +82,8 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
   // Format payment method
   const getPaymentMethodDisplay = () => {
     if (fullTransaction.paymentMethod?.card) {
-      const brand = fullTransaction.paymentMethod.card.brand.charAt(0).toUpperCase() + 
-                   fullTransaction.paymentMethod.card.brand.slice(1)
+      const brand = fullTransaction.paymentMethod.card.brand.charAt(0).toUpperCase() +
+        fullTransaction.paymentMethod.card.brand.slice(1)
       return `${brand} •••• ${fullTransaction.paymentMethod.card.last4}`
     }
     if (isLoading) {
@@ -193,7 +193,7 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
               Thank you for your payment!
             </p>
             {fullTransaction.receiptUrl && (
-              <a 
+              <a
                 href={fullTransaction.receiptUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -205,7 +205,7 @@ export default function ReceiptModal({ isOpen, onClose, transaction, purpose }: 
             <div className={styles.companyInfo}>
               <p className={styles.companyName}>FocusKPI</p>
               <p className={styles.companyAddress}>
-                123 Business Street, City, State 12345, United States
+                2026 FocusKPI, Inc. All rights reserved.
               </p>
             </div>
           </div>
