@@ -1,6 +1,6 @@
 'use client'
 
-import { useState,JSX } from 'react'
+import { useState, JSX } from 'react'
 import { useRouter } from 'next/navigation'
 import styles from './ReportModal.module.css'
 import { InfoIcon } from './Icons'
@@ -40,7 +40,7 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
       product_name: productName,
       user_type: (!user || isAnonymous) ? 'anonymous' : 'authenticated'
     })
-    
+
     // If user is anonymous, show sign-in modal
     if (!user || isAnonymous) {
       setShowSignInModal(true)
@@ -57,7 +57,7 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
       if (analysisId) {
         params.append('analysis_id', analysisId)
       }
-      params.append('restart','1')
+      params.append('restart', '1')
 
 
       router.push(`/results?${params.toString()}`)
@@ -78,7 +78,7 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
     if (analysisId) {
       params.append('analysis_id', analysisId)
     }
-    params.append('restart','1')
+    params.append('restart', '1')
     router.push(`/results?${params.toString()}`)
   }
 
@@ -97,7 +97,7 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
           <div className={styles.header}>
             <div className={styles.headerTop}>
               <h2 className={styles.title}>PHA Analysis Report (Preview)</h2>
-              <button 
+              <button
                 className={styles.generateButton}
                 onClick={handleGenerateReport}
               >
@@ -130,18 +130,19 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
                 {hazards.map((hazard, hazardIndex) => {
                   let isFirstHazardRow = true
                   const rows: JSX.Element[] = []
-                  
+
                   hazard.hazard_list?.forEach((harmItem, harmIndex) => {
                     let isFirstHarmRow = true
-                    
+
                     harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
                       let severityClass = styles.negligible
-                      if (severityItem.severity === 'Minor') severityClass = styles.minor
+                      if (severityItem.severity === 'Unprocessed') severityClass = styles.unprocessed
+                      else if (severityItem.severity === 'Minor') severityClass = styles.minor
                       else if (severityItem.severity === 'Negligible') severityClass = styles.negligible
                       else if (severityItem.severity === 'Serious') severityClass = styles.serious
                       else if (severityItem.severity === 'Critical') severityClass = styles.critical
                       else if (severityItem.severity === 'Major') severityClass = styles.major
-                      
+
                       rows.push(
                         <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
                           {isFirstHazardRow && (
@@ -160,8 +161,8 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
                             </span>
                           </td>
                           <td className={styles.td}>
-                            <button 
-                              className={styles.infoButton} 
+                            <button
+                              className={styles.infoButton}
                               title="Detail"
                               onClick={() => handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)}
                             >
@@ -170,12 +171,12 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
                           </td>
                         </tr>
                       )
-                      
+
                       isFirstHazardRow = false
                       isFirstHarmRow = false
                     })
                   })
-                  
+
                   return rows
                 })}
               </tbody>
