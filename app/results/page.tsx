@@ -74,10 +74,10 @@ function ResultsContent() {
   const [isLoadingHazards, setIsLoadingHazards] = useState(true)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const analysisIdRef = useRef<string | null>(null)
-    // Always keep analysisIdRef in sync with latest analysisId
-    useEffect(() => {
-      analysisIdRef.current = analysisId;
-    }, [analysisId]);
+  // Always keep analysisIdRef in sync with latest analysisId
+  useEffect(() => {
+    analysisIdRef.current = analysisId;
+  }, [analysisId]);
   const [automaticSettingsEnabled, setAutomaticSettingsEnabled] = useState<boolean>(false)
   const [shouldRestart, setShouldRestart] = useState<boolean>(false)
   const [hasTriggeredRestart, setHasTriggeredRestart] = useState<boolean>(false)
@@ -251,13 +251,13 @@ function ResultsContent() {
   useEffect(() => {
     // Prevent state updates during download
     if (isDownloading) return
-    
+
     const product = searchParams.get('productName') || ''
     const use = searchParams.get('intendedUse') || ''
     const generatingParam = searchParams.get('generating')
     const analysisIdParam = searchParams.get('analysis_id')
     const restartParam = searchParams.get('restart')
-    
+
     if (product) {
       setProductName(product)
     }
@@ -270,7 +270,7 @@ function ResultsContent() {
     if (restartParam === '1') {
       setShouldRestart(true)
     }
-    
+
     // If generating flag is present, show generating state
     if (generatingParam === 'true') {
       setIsGenerating(true)
@@ -354,12 +354,12 @@ function ResultsContent() {
         }
       }
     }
-    
+
     // Store the function reference for use in polling
     fetchHazardDataRef.current = fetchHazardData
-    
+
     fetchHazardData()
-    
+
     // Cleanup: stop polling when component unmounts or dependencies change
     return () => {
       stopPolling()
@@ -372,7 +372,7 @@ function ResultsContent() {
     try {
       console.log('[Results] Fetching report list...')
       const analyses = await analysisApi.fetchReportList()
-      
+
       const formattedReports: Report[] = analyses.map((analysis: any) => ({
         id: analysis.analysis_id,
         productName: analysis.device_name || 'Unknown Device',
@@ -394,10 +394,10 @@ function ResultsContent() {
   useEffect(() => {
     // Store the function reference for use in polling
     fetchReportListDataRef.current = fetchReportListData
-    
+
     // Fetch as soon as user is available (Firebase auth complete)
     if (!user) return
-    
+
     fetchReportListData()
   }, [user])
 
@@ -407,59 +407,59 @@ function ResultsContent() {
       console.log('[Results] Auto-triggering restart for analysis:', analysisId)
       setHasTriggeredRestart(true)
       setShouldRestart(false)
-      
+
       // Remove restart parameter from URL
       const params = new URLSearchParams(searchParams.toString())
       params.delete('restart')
       router.replace(`/results?${params.toString()}`)
-      
-      // Trigger the restart by calling the function inline
-      ;(async () => {
-        if (!analysisId) {
-          alert('No analysis ID available')
-          return
-        }
 
-        // Check payment status before restarting
-        console.log('[Results] Checking payment status before auto-restart...')
-        const hasPaid = await checkPaymentForGeneration()
-        
-        if (!hasPaid) {
-          // No payment found, show payment modal instead of restarting
-          console.log('[Results] Payment required for restart, showing payment modal')
-          setShowPaymentModal(true)
-          return
-        }
-
-        // Payment verified, proceed with restart
-        console.log('[Results] Payment verified, proceeding with restart')
-        try {
-          console.log('[Results] Restarting full analysis for:', analysisId)
-          const response = await analysisApi.restartFullAnalysis(analysisId)
-          console.log('[Results] Restart response:', response)
-          
-          // Immediately fetch updated filter settings to get the new automatic_settings_enabled status
-          try {
-            const filters = await analysisApi.getAnalysisFilters(analysisId)
-            console.log('[Results] Updated filters after restart:', filters)
-            setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
-          } catch (filterError) {
-            console.error('[Results] Error fetching updated filters:', filterError)
+        // Trigger the restart by calling the function inline
+        ; (async () => {
+          if (!analysisId) {
+            alert('No analysis ID available')
+            return
           }
-          
-          // Show generating state
-          setIsGenerating(true)
-          
-          // Navigate to the results page with generating flag
-          router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
-          
-          // Start polling for completion using unified polling function
-          startPolling(analysisId)
-        } catch (error) {
-          console.error('[Results] Error restarting analysis:', error)
-          alert('Failed to restart analysis. Please try again.')
-        }
-      })()
+
+          // Check payment status before restarting
+          console.log('[Results] Checking payment status before auto-restart...')
+          const hasPaid = await checkPaymentForGeneration()
+
+          if (!hasPaid) {
+            // No payment found, show payment modal instead of restarting
+            console.log('[Results] Payment required for restart, showing payment modal')
+            setShowPaymentModal(true)
+            return
+          }
+
+          // Payment verified, proceed with restart
+          console.log('[Results] Payment verified, proceeding with restart')
+          try {
+            console.log('[Results] Restarting full analysis for:', analysisId)
+            const response = await analysisApi.restartFullAnalysis(analysisId)
+            console.log('[Results] Restart response:', response)
+
+            // Immediately fetch updated filter settings to get the new automatic_settings_enabled status
+            try {
+              const filters = await analysisApi.getAnalysisFilters(analysisId)
+              console.log('[Results] Updated filters after restart:', filters)
+              setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
+            } catch (filterError) {
+              console.error('[Results] Error fetching updated filters:', filterError)
+            }
+
+            // Show generating state
+            setIsGenerating(true)
+
+            // Navigate to the results page with generating flag
+            router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
+
+            // Start polling for completion using unified polling function
+            startPolling(analysisId)
+          } catch (error) {
+            console.error('[Results] Error restarting analysis:', error)
+            alert('Failed to restart analysis. Please try again.')
+          }
+        })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldRestart, analysisId, isLoadingHazards, isGenerating, hasTriggeredRestart, user])
@@ -468,12 +468,12 @@ function ResultsContent() {
   useEffect(() => {
     // Only proceed if reports are loaded and not currently loading
     if (isLoadingReports || report_list.length === 0) return
-    
+
     // Check if there's no analysis_id in URL
     if (!analysisId && report_list.length > 0) {
       const firstReport = report_list[0]
       console.log('[Results] No analysis_id found, auto-selecting first report:', firstReport)
-      
+
       // Navigate to the first report
       router.push(`/results?analysis_id=${encodeURIComponent(firstReport.id)}&productName=${encodeURIComponent(firstReport.productName)}&intendedUse=${encodeURIComponent(firstReport.intendedUse)}`)
     }
@@ -485,15 +485,15 @@ function ResultsContent() {
       alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
       return
     }
-    
+
     trackEvent('view_report_modal', {
       analysis_id: report.id,
       product_name: report.productName
     })
-    
+
     // Check if clicking the same report
     const isSameReport = analysisId === report.id
-    
+
     if (isSameReport) {
       // If same report, just refresh the data without navigation
       console.log('[Results] Same report clicked, refreshing data')
@@ -504,7 +504,7 @@ function ResultsContent() {
       setCurrentPage(1)
       setProgressData(null)
       setIsLoadingHazards(true)
-      
+
       // Force re-fetch by temporarily clearing and re-setting analysisId
       setAnalysisId(null)
       setTimeout(() => setAnalysisId(report.id), 0)
@@ -517,7 +517,7 @@ function ResultsContent() {
       setTotalPages(1)
       setCurrentPage(1)
       setProgressData(null)
-      
+
       router.push(`/results?analysis_id=${encodeURIComponent(report.id)}&productName=${encodeURIComponent(report.productName)}&intendedUse=${encodeURIComponent(report.intendedUse)}`)
     }
   }
@@ -553,7 +553,7 @@ function ResultsContent() {
     console.log('[Results] ===== CHECKING PAYMENT FOR GENERATION =====')
     console.log('[Results] Analysis ID:', analysisId)
     console.log('[Results] User ID:', user?.uid)
-    
+
     if (!analysisId) {
       console.log('[Results] ❌ CONDITION FAILED: No analysis ID available')
       alert('No analysis ID available')
@@ -568,20 +568,20 @@ function ResultsContent() {
     try {
       // Get Firebase auth token
       const token = await user.getIdToken()
-      
+
       console.log('[Results] Step 1: Querying payment status from backend...')
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
       console.log('[Results] API URL:', `${apiUrl}/orders/analysis/${analysisId}/status`)
-      
+
       // Check if this specific analysis has been paid for
       const analysisResponse = await fetch(`${apiUrl}/orders/analysis/${analysisId}/status`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       })
-      
+
       console.log('[Results] Response status:', analysisResponse.status, analysisResponse.statusText)
-      
+
       if (!analysisResponse.ok) {
         console.log('[Results] ❌ API REQUEST FAILED')
         const errorData = await analysisResponse.json().catch(() => ({}))
@@ -591,7 +591,7 @@ function ResultsContent() {
 
       const analysisData = await analysisResponse.json()
       console.log('[Results] Raw API response:', analysisData)
-      
+
       if (analysisData.paid) {
         console.log('[Results] ✅ CONDITION MET: Payment found for this analysis')
         console.log('[Results] Order details:', analysisData.order)
@@ -616,7 +616,7 @@ function ResultsContent() {
     try {
       console.log('[Results] Exporting analysis:', analysisId)
       const blob = await analysisApi.exportAnalysis(analysisId, 'excel')
-      
+
       // Create download link
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -626,7 +626,7 @@ function ResultsContent() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
+
       console.log('[Results] Export completed')
     } catch (error) {
       console.error('[Results] Error exporting analysis:', error)
@@ -645,12 +645,12 @@ function ResultsContent() {
       // Check analysis status before downloading
       console.log('[Results] Checking analysis status before download:', analysisId)
       const statusResponse = await analysisApi.getAnalysisResults(analysisId, 1, 1)
-      
+
       if (statusResponse.status === 'Generating') {
         alert('Please wait for the analysis to complete')
         return
       }
-      
+
       // Directly download without payment check
       console.log('[Results] Proceeding with download')
       await performDownload()
@@ -667,7 +667,7 @@ function ResultsContent() {
       analysis_id: analysisId || undefined,
       product_name: productName || undefined
     });
-    
+
     // 清空右侧进度条和详情显示区域
     setProgressData(null);
     setCurrentHazards([]);
@@ -698,7 +698,7 @@ function ResultsContent() {
       console.log('[Results] Restarting full analysis for:', analysisId)
       const response = await analysisApi.restartFullAnalysis(analysisId)
       console.log('[Results] Restart response:', response)
-      
+
       // Immediately fetch updated filter settings to get the new automatic_settings_enabled status
       try {
         const filters = await analysisApi.getAnalysisFilters(analysisId)
@@ -707,13 +707,13 @@ function ResultsContent() {
       } catch (filterError) {
         console.error('[Results] Error fetching updated filters:', filterError)
       }
-      
+
       // Show generating state
       setIsGenerating(true)
-      
+
       // Navigate to the results page with generating flag
       router.push(`/results?analysis_id=${analysisId}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse)}&generating=true`)
-      
+
       // Start polling for completion using unified polling function
       startPolling(analysisId)
     } catch (error) {
@@ -736,17 +736,17 @@ function ResultsContent() {
 
   return (
     <main className={styles.main} style={{ flex: 1 }}>
-      <Header 
-        showAuthButtons={!user || isAnonymous} 
+      <Header
+        showAuthButtons={!user || isAnonymous}
         showUserMenu={!!(user && !isAnonymous)}
-        
+
       />
       <div className={`${styles.pageContent} ${!isSidebarExpanded ? styles.pageContentCollapsed : ''}`}>
         <div className={`${styles.sidebarWrapper} ${!isSidebarExpanded ? styles.sidebarWrapperCollapsed : ''}`}>
           <div className={`${styles.sidebar} ${!isSidebarExpanded ? styles.sidebarCollapsed : ''}`}>
             <div className={styles.sidebarHeader}>
               <h2 className={styles.sidebarTitle}>Report History</h2>
-              <button 
+              <button
                 className={styles.sidebarToggle}
                 onClick={() => {
                   trackEvent('re_toggle_sidebar', {
@@ -763,7 +763,7 @@ function ResultsContent() {
             {isSidebarExpanded && (
               <>
                 <div className={styles.buttonGroup}>
-                  <button 
+                  <button
                     className={styles.generateButton}
                     disabled={isDownloading}
                     onClick={() => {
@@ -784,7 +784,7 @@ function ResultsContent() {
                   >
                     Generate New Report
                   </button>
-                  <button 
+                  <button
                     className={styles.addDatasourceButton}
                     disabled={isDownloading}
                     onClick={() => {
@@ -839,427 +839,423 @@ function ResultsContent() {
           </div>
         </div>
         <div className={styles.container}>
-        {isGenerating ? (
-          <div className={styles.generatingState}>
-            <div className={styles.generatingSpinner}></div>
-            <h1 className={styles.generatingTitle}>Generating Your Full Report...</h1>
-            <p className={styles.generatingText}>This may take a few moments</p>
-          </div>
-        ) : (
-          <>
-            <div className={styles.header}>
-              <h1 className={styles.title}>{productName || 'PHA Analysis Draft'}</h1>
-              {user && automaticSettingsEnabled && (
-                <button 
-                  className={styles.generateWholeReportButton} 
-                  onClick={handleGenerateWholeReport}
-                  disabled={!!progressData || isLoadingHazards}
-                  style={{
-                    opacity: (progressData || isLoadingHazards) ? 0.6 : 1,
-                    cursor: (progressData || isLoadingHazards) ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  <DocumentGenerateIcon />
-                  {progressData ? 'Generating...' : isLoadingHazards ? 'Loading...' : 'Generate Whole Report'}
-                </button>
+          {isGenerating ? (
+            <div className={styles.generatingState}>
+              <div className={styles.generatingSpinner}></div>
+              <h1 className={styles.generatingTitle}>Generating Your Full Report...</h1>
+              <p className={styles.generatingText}>This may take a few moments</p>
+            </div>
+          ) : (
+            <>
+              <div className={styles.header}>
+                <h1 className={styles.title}>{productName || 'PHA Analysis Draft'}</h1>
+                {user && automaticSettingsEnabled && (
+                  <button
+                    className={styles.generateWholeReportButton}
+                    onClick={handleGenerateWholeReport}
+                    disabled={!!progressData || isLoadingHazards}
+                    style={{
+                      opacity: (progressData || isLoadingHazards) ? 0.6 : 1,
+                      cursor: (progressData || isLoadingHazards) ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    <DocumentGenerateIcon />
+                    {progressData ? 'Generating...' : isLoadingHazards ? 'Loading...' : 'Generate Whole Report'}
+                  </button>
+                )}
+                {user && !automaticSettingsEnabled && !isGenerating && (
+                  <button
+                    className={styles.downloadButton}
+                    onClick={() => {
+                      trackEvent('re_click_download_full_report', {
+                        analysis_id: analysisId || undefined,
+                        product_name: productName || undefined
+                      })
+                      handleDownload()
+                    }}
+                    disabled={isDownloading}
+                    style={{
+                      opacity: isDownloading ? 0.6 : 1,
+                      cursor: isDownloading ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    <DownloadIcon />
+                    {isDownloading ? 'Downloading...' : 'Download Full Report'}
+                  </button>
+                )}
+              </div>
+
+              {progressData && (
+                <div style={{ marginTop: '8px', padding: '16px', backgroundColor: 'white', border: '1px solid rgba(14, 165, 233, 0.2)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', display: 'flex', gap: '24px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>Detail Records Progress</span>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{progressData.progressPercentage.toFixed(1)}%</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                      {progressData.totalDetailRecords} / around {progressData.planTotalRecords} records
+                    </div>
+                    <div style={{ width: '100%', height: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '5px', overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', background: 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)', transition: 'width 0.3s ease', borderRadius: '5px' }}></div>
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>AI Processing Progress</span>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                      {progressData.aiCurrentCount} / Max {progressData.aiTotalRecords} records
+                    </div>
+                    <div style={{ width: '100%', height: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '5px', overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', background: 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)', transition: 'width 0.3s ease', borderRadius: '5px' }}></div>
+                    </div>
+                  </div>
+                </div>
               )}
-              {user && !automaticSettingsEnabled && !isGenerating && (
-                <button 
-                  className={styles.downloadButton} 
-                  onClick={() => {
-                    trackEvent('re_click_download_full_report', {
+
+              {intendedUse && (
+                <div className={styles.productInfo}>
+                  <div className={styles.intendedUseSummary}>
+                    Intended Use: {intendedUse == 'Default intended use' ? 'N/A' : intendedUse}
+                  </div>
+                </div>
+              )}
+
+              {/* Filter and Search Controls - Always visible */}
+              {!isLoadingHazards && !isGenerating && (
+                <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
+                    {/* Search Input */}
+                    <div style={{ flex: '1', minWidth: '200px' }}>
+                      <input
+                        type="text"
+                        value={searchInput}
+                        onChange={(e) => {
+                          setSearchInput(e.target.value)
+                        }}
+                        placeholder="Search hazards, harms..."
+                        disabled={progressData !== null}
+                        style={{
+                          width: '100%',
+                          padding: '6px 10px',
+                          border: '1px solid rgba(14, 165, 233, 0.2)',
+                          borderRadius: '6px',
+                          fontSize: '13px'
+                        }}
+                      />
+                    </div>
+
+                    {/* Severity Filter */}
+                    <div style={{ flex: '0 0 160px' }}>
+                      <select
+                        value={severityLevel}
+                        onChange={(e) => {
+                          trackEvent('re_filter_severity', {
+                            severity: e.target.value,
+                            analysis_id: analysisId || undefined
+                          })
+                          setSeverityLevel(e.target.value)
+                          setCurrentPage(1)
+                        }}
+                        disabled={progressData !== null}
+                        style={{
+                          width: '100%',
+                          padding: '6px 10px',
+                          border: '1px solid rgba(14, 165, 233, 0.2)',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          backgroundColor: 'white'
+                        }}
+                      >
+                        <option value="all">All Severities</option>
+                        <option value="Negligible">Negligible</option>
+                        <option value="Minor">Minor</option>
+                        <option value="Serious">Serious</option>
+                        <option value="Major">Major</option>
+                        <option value="Critical">Critical</option>
+                      </select>
+                    </div>
+
+                    {/* Results Info */}
+                    <div style={{ flex: '0 0 auto', fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                      Showing {hazards.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalHazards)} of {totalHazards} Hazards • Total Details: {totalRecords}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isLoadingHazards ? (
+                <div className={styles.generatingState}>
+                  <div className={styles.generatingSpinner}></div>
+                  <p className={styles.generatingText}>Loading report data...</p>
+                </div>
+              ) : hazards.length === 0 ? (
+                <div className={styles.generatingState}>
+                  <p className={styles.generatingText}>No hazard data available</p>
+                </div>
+              ) : (
+                <>
+
+                  <div className={styles.tableContainer}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th className={styles.th}>HAZARD</th>
+                          <th className={styles.th}>POTENTIAL HARM</th>
+                          <th className={styles.th}>SEVERITY</th>
+                          <th className={styles.th}>DETAIL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hazards.map((hazard, hazardIndex) => {
+                          let isFirstHazardRow = true
+                          const rows: JSX.Element[] = []
+
+                          hazard.hazard_list?.forEach((harmItem, harmIndex) => {
+                            let isFirstHarmRow = true
+
+                            harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
+                              let severityClass = styles.negligible
+                              if (severityItem.severity === 'Unprocessed') severityClass = styles.unprocessed
+                              else if (severityItem.severity === 'Minor') severityClass = styles.minor
+                              else if (severityItem.severity === 'Negligible') severityClass = styles.negligible
+                              else if (severityItem.severity === 'Serious') severityClass = styles.serious
+                              else if (severityItem.severity === 'Critical') severityClass = styles.critical
+                              else if (severityItem.severity === 'Major') severityClass = styles.major
+
+                              rows.push(
+                                <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
+                                  {isFirstHazardRow && (
+                                    <td className={`${styles.td} ${styles.tdHazard}`}
+                                      rowSpan={hazard.hazard_rowspan}>
+                                      {hazard.hazard}
+                                    </td>
+                                  )}
+                                  {isFirstHarmRow && (
+                                    <td className={styles.td} rowSpan={harmItem.harm_rowspan}>
+                                      {harmItem.potential_harm}
+                                    </td>
+                                  )}
+                                  <td className={`${styles.td}`}>
+                                    <span className={`${styles.severityBadge} ${severityClass}`}>
+                                      {severityItem.severity}
+                                    </span>
+                                  </td>
+                                  <td className={styles.td}>
+                                    <button
+                                      className={styles.infoButton}
+                                      title="Detail"
+                                      onClick={() => {
+                                        trackEvent('re_click_hazard_detail', {
+                                          analysis_id: analysisId || undefined,
+                                          hazard: hazard.hazard,
+                                          severity: severityItem.severity
+                                        })
+                                        handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)
+                                      }}
+                                    >
+                                      <InfoIcon />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+
+                              isFirstHazardRow = false
+                              isFirstHarmRow = false
+                            })
+                          })
+
+                          return rows
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'nowrap', gap: '8px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
+                      <button
+                        onClick={() => {
+                          trackEvent('re_pagination_first', {
+                            analysis_id: analysisId || undefined,
+                            current_page: currentPage,
+                            total_pages: totalPages
+                          })
+                          setCurrentPage(1)
+                        }}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          color: currentPage === 1 ? '#94a3b8' : 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.3s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        ⟨⟨ First
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          color: currentPage === 1 ? '#94a3b8' : 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.3s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        ← Prev
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 1 auto', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                          Page
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          max={totalPages}
+                          value={pageInput}
+                          onChange={(e) => {
+                            setPageInput(e.target.value)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const page = Number(pageInput)
+                              if (page >= 1 && page <= totalPages) {
+                                setCurrentPage(page)
+                              } else if (page < 1) {
+                                setCurrentPage(1)
+                                setPageInput('1')
+                              } else if (page > totalPages) {
+                                setCurrentPage(totalPages)
+                                setPageInput(totalPages.toString())
+                              }
+                            }
+                          }}
+                          style={{
+                            width: '50px',
+                            padding: '4px 6px',
+                            border: '1px solid rgba(14, 165, 233, 0.2)',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            textAlign: 'center'
+                          }}
+                        />
+                        <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                          / {totalPages}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
+                          Hazards Per page:
+                        </label>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => {
+                            setPageSize(Number(e.target.value))
+                            setCurrentPage(1)
+                          }}
+                          style={{
+                            padding: '4px 6px',
+                            border: '1px solid rgba(14, 165, 233, 0.2)',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            backgroundColor: 'white',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage >= totalPages}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.3s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Next →
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage >= totalPages}
+                        style={{
+                          padding: '6px 10px',
+                          backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
+                          color: currentPage >= totalPages ? '#94a3b8' : 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.3s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Last ⟩⟩
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {(!user || isAnonymous) && hazards.length > 0 && (
+                <div className={styles.footer}>
+                  <button className={styles.viewMoreButton} onClick={() => {
+                    trackEvent('re_click_view_more', {
                       analysis_id: analysisId || undefined,
                       product_name: productName || undefined
                     })
-                    handleDownload()
-                  }}
-                  disabled={isDownloading}
-                  style={{
-                    opacity: isDownloading ? 0.6 : 1,
-                    cursor: isDownloading ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  <DownloadIcon />
-                  {isDownloading ? 'Downloading...' : 'Download Full Report'}
-                </button>
+                    handleViewMore()
+                  }}>
+                    View More
+                  </button>
+                </div>
               )}
-            </div>
-            
-            {progressData && (
-              <div style={{ marginTop: '8px', padding: '16px', backgroundColor: 'white', border: '1px solid rgba(14, 165, 233, 0.2)', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', display: 'flex', gap: '24px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>Detail Records Progress</span>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{progressData.progressPercentage.toFixed(1)}%</span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                    {progressData.totalDetailRecords} / around {progressData.planTotalRecords} records
-                  </div>
-                  <div style={{ width: '100%', height: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '5px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(progressData.progressPercentage, 100)}%`, height: '100%', background: 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)', transition: 'width 0.3s ease', borderRadius: '5px' }}></div>
-                  </div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>AI Processing Progress</span>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{progressData.aiProgressPercentage.toFixed(1)}%</span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                    {progressData.aiCurrentCount} / Max {progressData.aiTotalRecords} records
-                  </div>
-                  <div style={{ width: '100%', height: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '5px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(progressData.aiProgressPercentage, 100)}%`, height: '100%', background: 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)', transition: 'width 0.3s ease', borderRadius: '5px' }}></div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {intendedUse && (
-              <div className={styles.productInfo}>
-                <details className={styles.intendedUseDetails}>
-                  <summary className={styles.intendedUseSummary}>
-                    {intendedUse}
-                  </summary>
-                  <div className={styles.intendedUseContent}>
-                    {intendedUse}
-                  </div>
-                </details>
-              </div>
-            )}
-
-            {/* Filter and Search Controls - Always visible */}
-            {!isLoadingHazards && !isGenerating && (
-              <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
-                  {/* Search Input */}
-                  <div style={{ flex: '1', minWidth: '200px' }}>
-                    <input
-                      type="text"
-                      value={searchInput}
-                      onChange={(e) => {
-                        setSearchInput(e.target.value)
-                      }}
-                      placeholder="Search hazards, harms..."
-                      disabled={progressData !== null}
-                      style={{
-                        width: '100%',
-                        padding: '6px 10px',
-                        border: '1px solid rgba(14, 165, 233, 0.2)',
-                        borderRadius: '6px',
-                        fontSize: '13px'
-                      }}
-                    />
-                  </div>
-                  
-                  {/* Severity Filter */}
-                  <div style={{ flex: '0 0 160px' }}>
-                    <select
-                      value={severityLevel}
-                      onChange={(e) => {
-                        trackEvent('re_filter_severity', {
-                          severity: e.target.value,
-                          analysis_id: analysisId || undefined
-                        })
-                        setSeverityLevel(e.target.value)
-                        setCurrentPage(1)
-                      }}
-                      disabled={progressData !== null}
-                      style={{
-                        width: '100%',
-                        padding: '6px 10px',
-                        border: '1px solid rgba(14, 165, 233, 0.2)',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        backgroundColor: 'white'
-                      }}
-                    >
-                      <option value="all">All Severities</option>
-                      <option value="Negligible">Negligible</option>
-                      <option value="Minor">Minor</option>
-                      <option value="Serious">Serious</option>
-                      <option value="Major">Major</option>
-                      <option value="Critical">Critical</option>
-                    </select>
-                  </div>
-                  
-                  {/* Results Info */}
-                  <div style={{ flex: '0 0 auto', fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap' }}>
-                    Showing {hazards.length > 0 ? ((currentPage - 1) * pageSize + 1) : 0} - {Math.min(currentPage * pageSize, totalHazards)} of {totalHazards} Hazards • Total Details: {totalRecords}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {isLoadingHazards ? (
-              <div className={styles.generatingState}>
-                <div className={styles.generatingSpinner}></div>
-                <p className={styles.generatingText}>Loading report data...</p>
-              </div>
-            ) : hazards.length === 0 ? (
-              <div className={styles.generatingState}>
-                <p className={styles.generatingText}>No hazard data available</p>
-              </div>
-            ) : (
-              <>
-
-              <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>HAZARD</th>
-                <th className={styles.th}>POTENTIAL HARM</th>
-                <th className={styles.th}>SEVERITY</th>
-                <th className={styles.th}>DETAIL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hazards.map((hazard, hazardIndex) => {
-                let isFirstHazardRow = true
-                const rows: JSX.Element[] = []
-                
-                hazard.hazard_list?.forEach((harmItem, harmIndex) => {
-                  let isFirstHarmRow = true
-                  
-                  harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
-                    let severityClass = styles.negligible
-                    if (severityItem.severity === 'Minor') severityClass = styles.minor
-                    else if (severityItem.severity === 'Negligible') severityClass = styles.negligible
-                    else if (severityItem.severity === 'Serious') severityClass = styles.serious
-                    else if (severityItem.severity === 'Critical') severityClass = styles.critical
-                    else if (severityItem.severity === 'Major') severityClass = styles.major
-                    
-                    rows.push(
-                      <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>
-                        {isFirstHazardRow && (
-                          <td className={`${styles.td} ${styles.tdHazard}`} 
-                            rowSpan={hazard.hazard_rowspan}>
-                            {hazard.hazard}
-                          </td>
-                        )}
-                        {isFirstHarmRow && (
-                          <td className={styles.td} rowSpan={harmItem.harm_rowspan}>
-                            {harmItem.potential_harm}
-                          </td>
-                        )}
-                        <td className={`${styles.td}`}>
-                          <span className={`${styles.severityBadge} ${severityClass}`}>
-                            {severityItem.severity}
-                          </span>
-                        </td>
-                        <td className={styles.td}>
-                          <button 
-                            className={styles.infoButton} 
-                            title="Detail"
-                            onClick={() => {
-                              trackEvent('re_click_hazard_detail', {
-                                analysis_id: analysisId || undefined,
-                                hazard: hazard.hazard,
-                                severity: severityItem.severity
-                              })
-                              handleInfoClick(hazard.hazard, harmItem.potential_harm, severityItem.severity)
-                            }}
-                          >
-                            <InfoIcon />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                    
-                    isFirstHazardRow = false
-                    isFirstHarmRow = false
-                  })
-                })
-                
-                return rows
-              })}
-            </tbody>
-          </table>
+            </>
+          )}
         </div>
-        
-        {/* Pagination Controls */}
-        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)', flexWrap: 'nowrap', gap: '8px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
-            <button
-              onClick={() => {
-                trackEvent('re_pagination_first', {
-                  analysis_id: analysisId || undefined,
-                  current_page: currentPage,
-                  total_pages: totalPages
-                })
-                setCurrentPage(1)
-              }}
-              disabled={currentPage === 1}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                color: currentPage === 1 ? '#94a3b8' : 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              ⟨⟨ First
-            </button>
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                background: currentPage === 1 ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                color: currentPage === 1 ? '#94a3b8' : 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              ← Prev
-            </button>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '0 1 auto', minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                Page
-              </span>
-              <input
-                type="number"
-                min="1"
-                max={totalPages}
-                value={pageInput}
-                onChange={(e) => {
-                  setPageInput(e.target.value)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const page = Number(pageInput)
-                    if (page >= 1 && page <= totalPages) {
-                      setCurrentPage(page)
-                    } else if (page < 1) {
-                      setCurrentPage(1)
-                      setPageInput('1')
-                    } else if (page > totalPages) {
-                      setCurrentPage(totalPages)
-                      setPageInput(totalPages.toString())
-                    }
-                  }
-                }}
-                style={{
-                  width: '50px',
-                  padding: '4px 6px',
-                  border: '1px solid rgba(14, 165, 233, 0.2)',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  textAlign: 'center'
-                }}
-              />
-              <span style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                / {totalPages}
-              </span>
-            </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1e293b', whiteSpace: 'nowrap' }}>
-                Per page:
-              </label>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value))
-                  setCurrentPage(1)
-                }}
-                style={{
-                  padding: '4px 6px',
-                  border: '1px solid rgba(14, 165, 233, 0.2)',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-              </select>
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                color: currentPage >= totalPages ? '#94a3b8' : 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              Next →
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage >= totalPages}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                background: currentPage >= totalPages ? '#e2e8f0' : 'linear-gradient(135deg, #0ea5e9 0%, #10b981 100%)',
-                color: currentPage >= totalPages ? '#94a3b8' : 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              Last ⟩⟩
-            </button>
-          </div>
-        </div>
-              </>
-            )}
-
-        {(!user || isAnonymous) && hazards.length > 0 && (
-          <div className={styles.footer}>
-            <button className={styles.viewMoreButton} onClick={() => {
-              trackEvent('re_click_view_more', {
-                analysis_id: analysisId || undefined,
-                product_name: productName || undefined
-              })
-              handleViewMore()
-            }}>
-              View More
-            </button>
-          </div>
-        )}
-          </>
-        )}
-      </div>
       </div>
 
       {showSignInModal && <SignInModal onClose={handleCloseModal} onSuccess={handleSignInSuccess} />}
       {showPaymentModal && (
-        <PaymentModal 
-          onClose={handleClosePayment} 
+        <PaymentModal
+          onClose={handleClosePayment}
           onSuccess={handlePaymentSuccess}
           reportId={analysisId || undefined}
           analysisId={analysisId || undefined}
@@ -1267,7 +1263,7 @@ function ResultsContent() {
           amount={5.00}
         />
       )}
-      <PHADetailsModal 
+      <PHADetailsModal
         isOpen={showPHADetailsModal}
         onClose={() => setShowPHADetailsModal(false)}
         analysisId={analysisId}
@@ -1282,10 +1278,10 @@ function ResultsContent() {
         onStartSuccess={async (analysisId, productName, intendedUse) => {
           // Close modal immediately
           setShowGenerateModal(false)
-          
+
           // Refresh report list to include the new report
           await fetchReportListData()
-          
+
           // Navigate to results page with the new analysis_id
           router.push(`/results?analysis_id=${encodeURIComponent(analysisId)}&productName=${encodeURIComponent(productName)}&intendedUse=${encodeURIComponent(intendedUse || '')}`)
         }}
