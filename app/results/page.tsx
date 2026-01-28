@@ -101,6 +101,7 @@ function ResultsContent() {
   const [pageInput, setPageInput] = useState('')
   const [includeUnprocessed, setIncludeUnprocessed] = useState(false)
   const [showUnprocessedInfo, setShowUnprocessedInfo] = useState(false)
+  const [showExportSuccessModal, setShowExportSuccessModal] = useState(false)
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
   const fetchHazardDataRef = useRef<(() => Promise<void>) | null>(null)
   const fetchReportListDataRef = useRef<(() => Promise<void>) | null>(null)
@@ -636,7 +637,7 @@ function ResultsContent() {
       const data = await analysisApi.exportAnalysis(analysisId, 'excel')
       console.log('[Results] Export task initiated:', data)
 
-      alert('Export task started successfully! You can find and download your report in the "Download Center" once it is ready.')
+      setShowExportSuccessModal(true)
     } catch (error) {
       console.error('[Results] Error initiating export:', error)
       alert('Failed to initiate export. Please try again.')
@@ -1348,6 +1349,39 @@ function ResultsContent() {
         isOpen={showAddDatasourceModal}
         onClose={() => setShowAddDatasourceModal(false)}
       />
+
+      {showExportSuccessModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent}>
+            <div className={styles.modalIconWrapper}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h2 className={styles.modalTitle}>Export Task Started</h2>
+            <p className={styles.modalDescription}>
+              Export task started successfully! You can find and download your report in the "Download Center" once it is ready.
+            </p>
+            <div className={styles.modalButtonGroup}>
+              <button
+                className={styles.modalPrimaryButton}
+                onClick={() => {
+                  setShowExportSuccessModal(false)
+                  router.push('/downloads')
+                }}
+              >
+                Go to Download Center
+              </button>
+              <button
+                className={styles.modalSecondaryButton}
+                onClick={() => setShowExportSuccessModal(false)}
+              >
+                Leave here
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main >
   )
 }

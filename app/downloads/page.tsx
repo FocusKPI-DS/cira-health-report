@@ -113,7 +113,8 @@ export default function DownloadCenterPage() {
                                                     className={styles.downloadButton}
                                                     onClick={() => handleDownload(task.id)}
                                                 >
-                                                    Download
+                                                    <span className={styles.buttonText}>Download</span>
+                                                    {!task.is_downloaded && <span className={styles.redDot} />}
                                                 </button>
                                             ) : task.status === 'GENERATING' ? (
                                                 <div className={styles.progressWrapper}>
