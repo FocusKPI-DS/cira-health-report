@@ -50,8 +50,14 @@ export const downloadApi = {
             throw new Error(`Failed to download file: ${response.statusText}`);
         }
 
+        //console log response headers
+        console.log(response.headers)
+
         // Get filename from header if possible, or default
+
+
         const disposition = response.headers.get('content-disposition');
+
         let filename = 'download';
         if (disposition && disposition.indexOf('attachment') !== -1) {
             const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;

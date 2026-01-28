@@ -94,7 +94,7 @@ export default function DownloadCenterPage() {
                                     <th>Date</th>
                                     <th>Product</th>
                                     <th>Type</th>
-                                    <th>Items</th>
+                                    <th>Details</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                 </tr>

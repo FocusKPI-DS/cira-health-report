@@ -1364,19 +1364,20 @@ function ResultsContent() {
             </p>
             <div className={styles.modalButtonGroup}>
               <button
+                className={styles.modalSecondaryButton}
+                onClick={() => setShowExportSuccessModal(false)}
+              >
+                Stay here
+              </button>
+              <button
                 className={styles.modalPrimaryButton}
                 onClick={() => {
                   setShowExportSuccessModal(false)
                   router.push('/downloads')
                 }}
               >
+                <DownloadIcon />
                 Go to Download Center
-              </button>
-              <button
-                className={styles.modalSecondaryButton}
-                onClick={() => setShowExportSuccessModal(false)}
-              >
-                Leave here
               </button>
             </div>
           </div>
