@@ -47,7 +47,7 @@ export interface HazardData {
  */
 function transformAnalysisResults(apiResults: any): HazardData[] {
   console.log('[Transform] Input data:', JSON.stringify(apiResults, null, 2))
-  
+
   if (!apiResults || !apiResults.results || !Array.isArray(apiResults.results)) {
     console.log('[Transform] Invalid input or no results array')
     return []
@@ -106,19 +106,19 @@ export const analysisApi = {
    */
   async startAnalysis(productCodes: string[], similarProducts: any[] = [], productName: string = '', intendedUse?: string): Promise<StartAnalysisResponse> {
     const headers = await getAuthHeaders()
-    
+
     const requestBody = {
       product_codes: productCodes,
       similar_products: similarProducts,
       product_name: productName,
       intended_use_snapshot: intendedUse || null
     }
-    
+
     console.log('[Start Analysis] API URL:', API_URL)
     console.log('[Start Analysis] Request URL:', `${API_URL}/api/v1/anonclient/start-analysis`)
     console.log('[Start Analysis] Request headers:', JSON.stringify(headers, null, 2))
     console.log('[Start Analysis] Request body:', JSON.stringify(requestBody, null, 2))
-    
+
     const response = await fetch(`${API_URL}/api/v1/anonclient/start-analysis`, {
       method: 'POST',
       headers: {
@@ -127,7 +127,7 @@ export const analysisApi = {
       },
       body: JSON.stringify(requestBody),
     })
-    
+
     if (!response.ok) {
       const errorText = await response.text()
       console.error('[Start Analysis] Error response:', {
@@ -135,17 +135,17 @@ export const analysisApi = {
         statusText: response.statusText,
         body: errorText
       })
-      
+
       let error
       try {
         error = JSON.parse(errorText)
       } catch {
         error = { detail: errorText || 'Failed to start analysis' }
       }
-      
+
       throw new Error(error.detail || `Failed to start analysis: ${response.statusText}`)
     }
-    
+
     const responseData = await response.json()
     console.log('[Start Analysis] Success response:', responseData)
     return responseData
@@ -164,12 +164,12 @@ export const analysisApi = {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to check analysis status' }))
       throw new Error(error.detail || 'Failed to check analysis status')
     }
-    
+
     return response.json()
   },
 
@@ -182,23 +182,25 @@ export const analysisApi = {
    * @param searchKeyword Search keyword (optional)
    */
   async getAnalysisResults(
-    analysisId: string, 
-    page: number = 1, 
+    analysisId: string,
+    page: number = 1,
     pageSize: number = 20,
     severityLevel: string = 'all',
-    searchKeyword: string = ''
+    searchKeyword: string = '',
+    includeUnprocessed: boolean = true
   ): Promise<AnalysisResultResponse> {
     const headers = await getAuthHeaders()
     const params = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString(),
       severity_level: severityLevel,
+      include_unprocessed: includeUnprocessed ? '1' : '0'
     })
-    
+
     if (searchKeyword) {
       params.append('search_keyword', searchKeyword)
     }
-    
+
     const response = await fetch(
       `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/grouped-details?${params.toString()}`,
       {
@@ -206,12 +208,12 @@ export const analysisApi = {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to get analysis results' }))
       throw new Error(error.detail || 'Failed to get analysis results')
     }
-    
+
     return response.json()
   },
 
@@ -242,7 +244,7 @@ export const analysisApi = {
       const pollStatus = async () => {
         try {
           const statusResponse = await this.checkAnalysisStatus(analysisId)
-          
+
           // Notify callback
           if (onStatusUpdate) {
             onStatusUpdate(statusResponse)
@@ -292,12 +294,12 @@ export const analysisApi = {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to fetch report list' }))
       throw new Error(error.detail || 'Failed to fetch report list')
     }
-    
+
     const data = await response.json()
     return data.analyses || []
   },
@@ -317,7 +319,7 @@ export const analysisApi = {
       potential_harm: potentialHarm,
       severity
     })
-    
+
     const response = await fetch(
       `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/group-records?${params.toString()}`,
       {
@@ -325,12 +327,12 @@ export const analysisApi = {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to fetch group records' }))
       throw new Error(error.detail || 'Failed to fetch group records')
     }
-    
+
     return response.json()
   },
 
@@ -348,12 +350,12 @@ export const analysisApi = {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to fetch analysis filters' }))
       throw new Error(error.detail || 'Failed to fetch analysis filters')
     }
-    
+
     return response.json()
   },
 
@@ -375,12 +377,12 @@ export const analysisApi = {
         body: JSON.stringify({ analysis_id: analysisId }),
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to restart analysis' }))
       throw new Error(error.detail || 'Failed to restart analysis')
     }
-    
+
     return response.json()
   },
 
@@ -399,12 +401,12 @@ export const analysisApi = {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to export analysis' }))
       throw new Error(error.detail || 'Failed to export analysis')
     }
-    
+
     return response.blob()
   }
 }

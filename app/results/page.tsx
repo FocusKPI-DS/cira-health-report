@@ -99,6 +99,7 @@ function ResultsContent() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [pageInput, setPageInput] = useState('')
+  const [includeUnprocessed, setIncludeUnprocessed] = useState(false)
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
   const fetchHazardDataRef = useRef<(() => Promise<void>) | null>(null)
   const fetchReportListDataRef = useRef<(() => Promise<void>) | null>(null)
@@ -155,7 +156,8 @@ function ResultsContent() {
           currentPage,
           pageSize,
           severityLevel,
-          searchKeyword
+          searchKeyword,
+          includeUnprocessed
         );
         console.log('[Results] Polling status:', response.status);
 
@@ -298,8 +300,8 @@ function ResultsContent() {
 
       setIsLoadingHazards(true)
       try {
-        console.log('[Results] Fetching hazard data for analysis_id:', currentAnalysisId, 'page:', currentPage, 'pageSize:', pageSize, 'severity:', severityLevel, 'search:', searchKeyword)
-        const response = await analysisApi.getAnalysisResults(currentAnalysisId, currentPage, pageSize, severityLevel, searchKeyword)
+        console.log('[Results] Fetching hazard data for analysis_id:', currentAnalysisId, 'page:', currentPage, 'pageSize:', pageSize, 'severity:', severityLevel, 'search:', searchKeyword, 'includeUnprocessed:', includeUnprocessed)
+        const response = await analysisApi.getAnalysisResults(currentAnalysisId, currentPage, pageSize, severityLevel, searchKeyword, includeUnprocessed)
 
         // Check if user has switched to a different analysis while we were fetching
         if (analysisIdRef.current !== currentAnalysisId) {
@@ -364,7 +366,7 @@ function ResultsContent() {
     return () => {
       stopPolling()
     }
-  }, [analysisId, currentPage, pageSize, severityLevel, searchKeyword])
+  }, [analysisId, currentPage, pageSize, severityLevel, searchKeyword, includeUnprocessed])
 
   // Function to fetch report list
   const fetchReportListData = async () => {
@@ -927,7 +929,7 @@ function ResultsContent() {
                 <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'nowrap' }}>
                     {/* Search Input */}
-                    <div style={{ flex: '1', minWidth: '200px' }}>
+                    <div style={{ flex: '1', minWidth: '120px' }}>
                       <input
                         type="text"
                         value={searchInput}
@@ -945,6 +947,7 @@ function ResultsContent() {
                         }}
                       />
                     </div>
+
 
                     {/* Severity Filter */}
                     <div style={{ flex: '0 0 160px' }}>
@@ -975,6 +978,23 @@ function ResultsContent() {
                         <option value="Major">Major</option>
                         <option value="Critical">Critical</option>
                       </select>
+                    </div>
+                    {/* Include Unprocessed Checkbox */}
+                    <div style={{ flex: '1', minWidth: '150px' }}>
+                      <input
+                        type="checkbox"
+                        checked={includeUnprocessed}
+                        onChange={(e) => {
+                          trackEvent('re_filter_include_unprocessed', {
+                            include_unprocessed: e.target.checked,
+                            analysis_id: analysisId || undefined
+                          })
+                          setIncludeUnprocessed(e.target.checked)
+                          setCurrentPage(1)
+                        }}
+
+
+                      /><span style={{ marginLeft: "0.25rem", flex: '0 0 auto', fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap' }}>Include Unprocessed</span>
                     </div>
 
                     {/* Results Info */}
@@ -1253,16 +1273,18 @@ function ResultsContent() {
       </div>
 
       {showSignInModal && <SignInModal onClose={handleCloseModal} onSuccess={handleSignInSuccess} />}
-      {showPaymentModal && (
-        <PaymentModal
-          onClose={handleClosePayment}
-          onSuccess={handlePaymentSuccess}
-          reportId={analysisId || undefined}
-          analysisId={analysisId || undefined}
-          productName={productName || undefined}
-          amount={5.00}
-        />
-      )}
+      {
+        showPaymentModal && (
+          <PaymentModal
+            onClose={handleClosePayment}
+            onSuccess={handlePaymentSuccess}
+            reportId={analysisId || undefined}
+            analysisId={analysisId || undefined}
+            productName={productName || undefined}
+            amount={5.00}
+          />
+        )
+      }
       <PHADetailsModal
         isOpen={showPHADetailsModal}
         onClose={() => setShowPHADetailsModal(false)}
@@ -1291,7 +1313,7 @@ function ResultsContent() {
         isOpen={showAddDatasourceModal}
         onClose={() => setShowAddDatasourceModal(false)}
       />
-    </main>
+    </main >
   )
 }
 
