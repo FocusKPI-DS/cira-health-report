@@ -392,7 +392,7 @@ export const analysisApi = {
    * @param format Export format (csv, excel, or pdf)
    * @returns Blob of the exported file
    */
-  async exportAnalysis(analysisId: string, format: 'csv' | 'excel' | 'pdf' = 'excel'): Promise<Blob> {
+  async exportAnalysis(analysisId: string, format: 'csv' | 'excel' | 'pdf' = 'excel'): Promise<any> {
     const headers = await getAuthHeaders()
     const response = await fetch(
       `${API_URL}/api/v1/analyses/${encodeURIComponent(analysisId)}/pha/export?format=${format}`,
@@ -407,6 +407,6 @@ export const analysisApi = {
       throw new Error(error.detail || 'Failed to export analysis')
     }
 
-    return response.blob()
+    return response.json()
   }
 }

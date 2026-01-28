@@ -10,17 +10,26 @@ interface HeaderProps {
   showAuthButtons?: boolean
   showUserMenu?: boolean
   showNavMenu?: boolean
+  isDownloading?: boolean
 }
 
-export default function Header({ showAuthButtons = true, showUserMenu = false, showNavMenu = false }: HeaderProps) {
+export default function Header({ showAuthButtons = true, showUserMenu = false, showNavMenu = false, isDownloading = false }: HeaderProps) {
   const router = useRouter()
   const { user, isAnonymous, loading, currentTeamId } = useAuth()
 
   const handleLogin = () => {
+    if (isDownloading) {
+      alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
+      return
+    }
     router.push('/login')
   }
 
   const handleGoToEnterprise = () => {
+    if (isDownloading) {
+      alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
+      return
+    }
     const homepageUrl = '/#contact';
     window.location.href = homepageUrl;
   }
@@ -47,9 +56,24 @@ export default function Header({ showAuthButtons = true, showUserMenu = false, s
   return (
     <div className={styles.navbar}>
       <div className={styles.navContainer}>
-        <Link href="/" className={styles.logo}>
-          <img src="/images/cira-logo.png" alt="Cira Health" style={{ height: '36px' }} />
-        </Link>
+        <div
+          onClick={(e) => {
+            if (isDownloading) {
+              e.preventDefault();
+              e.stopPropagation();
+              alert('A spreadsheet is currently being generated. Please do not switch analysis reports.');
+            }
+          }}
+          className={styles.logoWrapper}
+        >
+          <Link href="/" className={styles.logo} onClick={(e) => {
+            if (isDownloading) {
+              e.preventDefault();
+            }
+          }}>
+            <img src="/images/cira-logo.png" alt="Cira Health" style={{ height: '36px' }} />
+          </Link>
+        </div>
         {showNavMenu && (
           <nav className={styles.navMenu}>
             <a href="#hero" onClick={(e) => handleNavClick(e, 'hero')} className={styles.navLink}>
@@ -78,10 +102,10 @@ export default function Header({ showAuthButtons = true, showUserMenu = false, s
           <button className={styles.enterpriseButton} onClick={handleGoToEnterprise}>
             Go to Enterprise Version
           </button>
-          {!shouldShowUserMenu && 
-          <button className={styles.loginButton} onClick={handleLogin}>
-            Login / Sign Up
-          </button>
+          {!shouldShowUserMenu &&
+            <button className={styles.loginButton} onClick={handleLogin}>
+              Login / Sign Up
+            </button>
           }
         </div>
       </div>

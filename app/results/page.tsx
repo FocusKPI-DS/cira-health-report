@@ -100,6 +100,7 @@ function ResultsContent() {
   const [searchInput, setSearchInput] = useState('')
   const [pageInput, setPageInput] = useState('')
   const [includeUnprocessed, setIncludeUnprocessed] = useState(false)
+  const [showUnprocessedInfo, setShowUnprocessedInfo] = useState(false)
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null)
   const fetchHazardDataRef = useRef<(() => Promise<void>) | null>(null)
   const fetchReportListDataRef = useRef<(() => Promise<void>) | null>(null)
@@ -249,6 +250,21 @@ function ResultsContent() {
   useEffect(() => {
     setPageInput(currentPage.toString())
   }, [currentPage])
+
+  // Prevent refresh/close when downloading
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDownloading) {
+        const message = 'A spreadsheet is currently being generated. Please do not switch analysis reports.'
+        e.preventDefault()
+        e.returnValue = message
+        return message
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDownloading])
 
   useEffect(() => {
     // Prevent state updates during download
@@ -616,23 +632,14 @@ function ResultsContent() {
     }
 
     try {
-      console.log('[Results] Exporting analysis:', analysisId)
-      const blob = await analysisApi.exportAnalysis(analysisId, 'excel')
+      console.log('[Results] Initiating export task:', analysisId)
+      const data = await analysisApi.exportAnalysis(analysisId, 'excel')
+      console.log('[Results] Export task initiated:', data)
 
-      // Create download link
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `pha_analysis_${analysisId}_details.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      console.log('[Results] Export completed')
+      alert('Export task started successfully! You can find and download your report in the "Download Center" once it is ready.')
     } catch (error) {
-      console.error('[Results] Error exporting analysis:', error)
-      alert('Failed to export report. Please try again.')
+      console.error('[Results] Error initiating export:', error)
+      alert('Failed to initiate export. Please try again.')
     }
   }
 
@@ -733,6 +740,10 @@ function ResultsContent() {
 
   // Add a click handler for the "Go To Enterprise Version" button
   const handleGoToEnterpriseVersion = () => {
+    if (isDownloading) {
+      alert('A spreadsheet is currently being generated. Please do not switch analysis reports.')
+      return
+    }
     router.push('/#contact-us'); // Redirect to the homepage with the Contact Us anchor
   }
 
@@ -741,7 +752,7 @@ function ResultsContent() {
       <Header
         showAuthButtons={!user || isAnonymous}
         showUserMenu={!!(user && !isAnonymous)}
-
+        isDownloading={isDownloading}
       />
       <div className={`${styles.pageContent} ${!isSidebarExpanded ? styles.pageContentCollapsed : ''}`}>
         <div className={`${styles.sidebarWrapper} ${!isSidebarExpanded ? styles.sidebarWrapperCollapsed : ''}`}>
@@ -980,10 +991,11 @@ function ResultsContent() {
                       </select>
                     </div>
                     {/* Include Unprocessed Checkbox */}
-                    <div style={{ flex: '1', minWidth: '150px' }}>
+                    <div style={{ flex: '1', minWidth: '150px', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="checkbox"
                         checked={includeUnprocessed}
+                        id="includeUnprocessed"
                         onChange={(e) => {
                           trackEvent('re_filter_include_unprocessed', {
                             include_unprocessed: e.target.checked,
@@ -992,9 +1004,32 @@ function ResultsContent() {
                           setIncludeUnprocessed(e.target.checked)
                           setCurrentPage(1)
                         }}
-
-
-                      /><span style={{ marginLeft: "0.25rem", flex: '0 0 auto', fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap' }}>Include Unprocessed</span>
+                      />
+                      <label
+                        htmlFor="includeUnprocessed"
+                        style={{
+                          marginLeft: "0.25rem",
+                          fontSize: '13px',
+                          color: '#64748b',
+                          whiteSpace: 'nowrap',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Include Unprocessed
+                      </label>
+                      <div
+                        className={styles.tooltipContainer}
+                        onClick={() => setShowUnprocessedInfo(!showUnprocessedInfo)}
+                        onMouseEnter={() => setShowUnprocessedInfo(true)}
+                        onMouseLeave={() => setShowUnprocessedInfo(false)}
+                      >
+                        <InfoIcon />
+                        {showUnprocessedInfo && (
+                          <div className={styles.tooltip}>
+                            Whether the current filter results should include entries that have not yet been processed by AI.
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Results Info */}
