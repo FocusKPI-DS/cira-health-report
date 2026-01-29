@@ -34,6 +34,7 @@ export interface AnalysisResultResponse {
   ai_current_count?: number
   ai_total_records?: number
   ai_progress_percentage?: number
+  filters?: any
 }
 
 export interface HazardData {

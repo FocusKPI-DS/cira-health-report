@@ -176,6 +176,11 @@ function ResultsContent() {
         setTotalHazards(response.total || 0);
         setTotalRecords(response.total_records || 0);
 
+        // Update filters if present in polling response
+        if (response.filters) {
+          setAutomaticSettingsEnabled(response.filters.automatic_settings_enabled || false);
+        }
+
         if (response.status !== 'Generating') {
           console.log('[Results] Analysis completed, stopping polling');
           setIsGenerating(false);
@@ -351,14 +356,20 @@ function ResultsContent() {
           stopPolling()
         }
 
-        // Fetch filter settings to check automatic_settings_enabled
-        try {
-          const filters = await analysisApi.getAnalysisFilters(currentAnalysisId)
-          console.log('[Results] Fetched filters:', filters)
-          setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
-        } catch (filterError) {
-          console.error('[Results] Error fetching filters:', filterError)
-          setAutomaticSettingsEnabled(false)
+        // Use filter settings from grouped-details response
+        if (response.filters) {
+          console.log('[Results] Using filters from results response:', response.filters);
+          setAutomaticSettingsEnabled(response.filters.automatic_settings_enabled || false);
+        } else {
+          // Fallback if filters are missing (older backend versions or unexpected response)
+          try {
+            const filters = await analysisApi.getAnalysisFilters(currentAnalysisId);
+            console.log('[Results] Fetched filters (fallback):', filters);
+            setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false);
+          } catch (filterError) {
+            console.error('[Results] Error fetching filters (fallback):', filterError);
+            setAutomaticSettingsEnabled(false);
+          }
         }
       } catch (error) {
         console.error('[Results] Error fetching hazard data:', error)
@@ -709,13 +720,10 @@ function ResultsContent() {
       const response = await analysisApi.restartFullAnalysis(analysisId)
       console.log('[Results] Restart response:', response)
 
-      // Immediately fetch updated filter settings to get the new automatic_settings_enabled status
-      try {
-        const filters = await analysisApi.getAnalysisFilters(analysisId)
-        console.log('[Results] Updated filters after restart:', filters)
-        setAutomaticSettingsEnabled(filters.automatic_settings_enabled || false)
-      } catch (filterError) {
-        console.error('[Results] Error fetching updated filters:', filterError)
+      // Use filters from restart response if available
+      if (response.filters) {
+        console.log('[Results] Updated filters from restart response:', response.filters);
+        setAutomaticSettingsEnabled(response.filters.automatic_settings_enabled || false);
       }
 
       // Show generating state
