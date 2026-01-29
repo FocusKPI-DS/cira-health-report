@@ -1048,7 +1048,7 @@ function ResultsContent() {
                 </div>
               ) : hazards.length === 0 ? (
                 <div className={styles.generatingState}>
-                  <p className={styles.generatingText}>No hazard data available</p>
+                  <p className={styles.generatingText}>{progressData ? "hazard data is generating..." : "No hazard data available"}</p>
                 </div>
               ) : (
                 <>
