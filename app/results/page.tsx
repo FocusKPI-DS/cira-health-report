@@ -1072,13 +1072,7 @@ function ResultsContent() {
                             let isFirstHarmRow = true
 
                             harmItem.potential_harm_list?.forEach((severityItem, severityIndex) => {
-                              let severityClass = styles.negligible
-                              if (severityItem.severity === 'Unprocessed') severityClass = styles.unprocessed
-                              else if (severityItem.severity === 'Minor') severityClass = styles.minor
-                              else if (severityItem.severity === 'Negligible') severityClass = styles.negligible
-                              else if (severityItem.severity === 'Serious') severityClass = styles.serious
-                              else if (severityItem.severity === 'Critical') severityClass = styles.critical
-                              else if (severityItem.severity === 'Major') severityClass = styles.major
+                              const severityClass = styles[severityItem.severity] || styles.Unprocessed;
 
                               rows.push(
                                 <tr key={`${hazardIndex}-${harmIndex}-${severityIndex}`} className={styles.tr}>

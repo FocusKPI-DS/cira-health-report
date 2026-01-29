@@ -509,33 +509,33 @@
   display: inline-block;
 }
 
-.unprocessed {
+.Unprocessed {
   background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
   color: white;
 }
 
-.negligible {
+.Negligible {
   background: linear-gradient(135deg, #84cc16 0%, #6db115 100%);
   color: white;
 }
 
-.minor {
+.Minor {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
 }
 
 
-.serious {
+.Serious {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: white;
 }
 
-.major {
+.Major {
   background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   color: white;
 }
 
-.critical {
+.Critical {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: white;
 }
