@@ -213,3 +213,110 @@
         box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
     }
 }
+
+.searchRow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.searchInput {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #e6e9ee;
+    font-size: 14px;
+}
+
+.button {
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.smallButton {
+    background: #eef2ff;
+    color: #3730a3;
+    border: 1px solid #e0e7ff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.resultsList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.resultItem {
+    background: white;
+    border: 1px solid #eef0f2;
+    padding: 12px;
+    border-radius: 10px;
+}
+
+.pager {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.modalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+    z-index: 2000;
+}
+
+.modal {
+    background: white;
+    max-width: 1000px;
+    width: 100%;
+    max-height: 80vh;
+    overflow: auto;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 12px 40px rgba(2,6,23,0.2);
+}
+
+/* Link styling: make links visually distinct in results, tables and modals */
+.resultItem a,
+.tableContainer a,
+.resultsList a {
+    color: #1d4ed8;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.resultItem a:visited,
+.tableContainer a:visited {
+    color: #1e40af;
+}
+
+.resultItem a:hover,
+.tableContainer a:hover,
+.resultsList a:hover {
+    color: #08306b;
+    text-decoration: none;
+    background: rgba(29,78,216,0.06);
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.modal a { color: #2563eb; text-decoration: underline; }
+.modal a:hover { text-decoration: none; background: rgba(37,99,235,0.06); border-radius: 4px; padding: 2px 4px; }

@@ -48,11 +48,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsAnonymous(firebaseUser.isAnonymous)
         console.log('User logged in:', firebaseUser.isAnonymous ? 'Anonymous User' : firebaseUser.email, firebaseUser.uid)
         
-        // Sync existing user with backend
-        await syncUserToBackend(firebaseUser)
-        const teamId = await syncUserToApphub(firebaseUser)
-        if (teamId) {
-          setCurrentTeamId(teamId)
+        // Sync existing user with backend (guarded to avoid unhandled rejections)
+        try {
+          await syncUserToBackend(firebaseUser)
+        } catch (err) {
+          console.error('syncUserToBackend failed:', err)
+        }
+
+        try {
+          const teamId = await syncUserToApphub(firebaseUser)
+          if (teamId) {
+            setCurrentTeamId(teamId)
+          }
+        } catch (err) {
+          console.error('syncUserToApphub failed:', err)
         }
         
         setLoading(false)
@@ -69,11 +78,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user_id: result.user.uid
           })
           
-          // Sync anonymous user with backend
-          await syncUserToBackend(result.user)
-          const teamId = await syncUserToApphub(result.user)
-          if (teamId) {
-            setCurrentTeamId(teamId)
+          // Sync anonymous user with backend (guarded)
+          try {
+            await syncUserToBackend(result.user)
+          } catch (err) {
+            console.error('syncUserToBackend (anon) failed:', err)
+          }
+
+          try {
+            const teamId = await syncUserToApphub(result.user)
+            if (teamId) {
+              setCurrentTeamId(teamId)
+            }
+          } catch (err) {
+            console.error('syncUserToApphub (anon) failed:', err)
           }
         } catch (error: any) {
           console.error('Anonymous login failed:', error.message)
@@ -280,8 +298,16 @@ async function syncUserToBackend(firebaseUser: User) {
     }
 
     // Sync user with backend
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
-    
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8002'
+
+    // Debug: log resolved API URL and token presence
+    try {
+      console.debug('syncUserToBackend -> apiUrl:', apiUrl)
+      console.debug('syncUserToBackend -> idToken present:', !!idToken)
+    } catch (e) {
+      // ignore console debug failures
+    }
+
     // Wait 1 second to prevent "token used too early" errors due to clock skew
     //await new Promise(resolve => setTimeout(resolve, 1000))
 
@@ -294,8 +320,8 @@ async function syncUserToBackend(firebaseUser: User) {
           'Content-Type': 'application/json',
         },
       })
-    } catch (fetchError) {
-      console.error('Network error syncing user:', fetchError)
+    } catch (fetchError: any) {
+      console.error('Network error syncing user:', fetchError?.message || fetchError)
       return
     }
 
@@ -335,8 +361,16 @@ async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
     }
 
     // Sync user with backend
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
-    
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8002'
+
+    // Debug: log resolved API URL and token presence
+    try {
+      console.debug('syncUserToApphub -> apiUrl:', apiUrl)
+      console.debug('syncUserToApphub -> idToken present:', !!idToken)
+    } catch (e) {
+      // ignore
+    }
+
     // Wait 1 second to prevent "token used too early" errors due to clock skew
     //await new Promise(resolve => setTimeout(resolve, 1000))
 
@@ -349,8 +383,8 @@ async function syncUserToApphub(firebaseUser: User): Promise<string | null> {
           'Content-Type': 'application/json',
         },
       })
-    } catch (fetchError) {
-      console.error('Network error syncing user:', fetchError)
+    } catch (fetchError: any) {
+      console.error('Network error syncing user:', fetchError?.message || fetchError)
       return null
     }
 
