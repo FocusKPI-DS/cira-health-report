@@ -67,6 +67,7 @@ export default function Home() {
           </p>
           <form onSubmit={handleSubmit} className={styles.ctaForm}>
             <input
+              id="productName"
               type="text"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
