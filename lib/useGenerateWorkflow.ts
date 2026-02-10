@@ -212,7 +212,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setProductsFound(true)
         // Show different message based on data source
         let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (data.source === 'openai') {
+        if (data.source === 'openai'||data.source === 'hybrid') {
           message = 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
         } else if (data.source === 'hybrid') {
           message = 'No direct matches found. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
@@ -269,7 +269,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setProductsFound(true)
         // Show different message based on data source
         let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (data.source === 'openai') {
+        if (data.source === 'openai'||data.source === 'hybrid') {
           message = 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
         } else if (data.source === 'hybrid') {
           message = 'No direct matches found. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
