@@ -40,7 +40,7 @@ async function getProductCodesFromOpenAI(deviceName: string): Promise<{ productC
         },
         {
           role: 'user',
-          content: `What are the most likely FDA product codes for "${deviceName}"? List up to 5 most relevant codes. Output only in JSON format: {"product_code":["CODE1","CODE2",...]}`
+          content: `What are the most likely FDA product codes for "${deviceName}"? List up to 5 most relevant codes. Output only in JSON format: {"product_code":["CODE1","CODE2",...],"reasoning":"explanation text"}`
         }
       ],
       response_format: { type: 'json_object' },
