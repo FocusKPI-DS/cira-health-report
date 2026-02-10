@@ -197,8 +197,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     })
     
     try {
-      // Call FDA search API
-      const response = await fetch(`/api/search-fda-products?deviceName=${encodeURIComponent(productName)}&limit=20`)
+      // Call Python backend FDA search API
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${baseUrl}/api/v1/anonclient/search-fda-products?deviceName=${encodeURIComponent(productName)}&limit=20`)
       
       if (!response.ok) {
         throw new Error('Failed to search FDA database')
@@ -210,9 +211,12 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setSimilarProducts(data.results)
         setProductsFound(true)
         // Show different message based on data source
-        const message = data.source === 'fda'
-          ? 'Following are the products I could find. Please select the ones that fit the best:'
-          : 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+        let message = 'Following are the products I could find. Please select the ones that fit the best:'
+        if (data.source === 'openai') {
+          message = 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+        } else if (data.source === 'hybrid') {
+          message = 'No direct matches found. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
+        }
         addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
       } else {
@@ -250,8 +254,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     addMessage('ai', 'First, I\'ll search for similar products in the FDA product classification database...', 'searching-products')
     
     try {
-      // Call FDA search API
-      const response = await fetch(`/api/search-fda-products?deviceName=${encodeURIComponent(newDeviceName)}&limit=20`)
+      // Call Python backend FDA search API
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${baseUrl}/api/v1/anonclient/search-fda-products?deviceName=${encodeURIComponent(newDeviceName)}&limit=20`)
       
       if (!response.ok) {
         throw new Error('Failed to search FDA database')
@@ -263,9 +268,12 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setSimilarProducts(data.results)
         setProductsFound(true)
         // Show different message based on data source
-        const message = data.source === 'fda'
-          ? 'Following are the products I could find. Please select the ones that fit the best:'
-          : 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+        let message = 'Following are the products I could find. Please select the ones that fit the best:'
+        if (data.source === 'openai') {
+          message = 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+        } else if (data.source === 'hybrid') {
+          message = 'No direct matches found. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
+        }
         addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
       } else {
