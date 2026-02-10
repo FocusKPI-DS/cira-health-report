@@ -209,7 +209,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       if (data.results && data.results.length > 0) {
         setSimilarProducts(data.results)
         setProductsFound(true)
-        addMessage('ai', 'Following are the products I could find. Please select the ones that fit the best:', 'similar-products')
+        // Show different message based on data source
+        const message = data.source === 'fda'
+          ? 'Following are the products I could find. Please select the ones that fit the best:'
+          : 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+        addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
       } else {
         setSimilarProducts([])
@@ -258,7 +262,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       if (data.results && data.results.length > 0) {
         setSimilarProducts(data.results)
         setProductsFound(true)
-        addMessage('ai', 'Following are the products I could find. Please select the ones that fit the best:', 'similar-products')
+        // Show different message based on data source
+        const message = data.source === 'fda'
+          ? 'Following are the products I could find. Please select the ones that fit the best:'
+          : 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+        addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
       } else {
         setSimilarProducts([])
