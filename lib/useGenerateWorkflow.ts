@@ -213,9 +213,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         // Show different message based on data source
         let message = 'Following are the products I could find. Please select the ones that fit the best:'
         if (data.source === 'openai'||data.source === 'hybrid') {
-          message = 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+          message = 'No exact match found from FDA database. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
         } else if (data.source === 'hybrid') {
-          message = 'No direct matches found. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
+          message = 'No exact match found from FDA database. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
         }
         addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
@@ -270,9 +270,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         // Show different message based on data source
         let message = 'Following are the products I could find. Please select the ones that fit the best:'
         if (data.source === 'openai'||data.source === 'hybrid') {
-          message = 'No direct matches found. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
+          message = 'No exact match found from FDA database. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
         } else if (data.source === 'hybrid') {
-          message = 'No direct matches found. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
+          message = 'No exact match found from FDA database. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
         }
         addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
