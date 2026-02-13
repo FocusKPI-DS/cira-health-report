@@ -339,7 +339,7 @@ export default function GenerateWorkflowContent({
                                   </div>
                                   {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
                                   {product.regulationNumber && <div><strong>Regulation Number:</strong> 
-                                  <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`}
+                                  {'\u00A0'}<a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`}
                                    target="_blank" rel="noopener noreferrer" className={styles.fdaLink}
                                   >{product.regulationNumber}</a></div>}
                                   {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
