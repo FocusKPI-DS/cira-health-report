@@ -149,7 +149,7 @@ export default function GenerateWorkflowContent({
               if (tempProductCode.trim()) {
                 handleProductCodeSubmit(tempProductCode)
               }
-            }} className={styles.inlineForm}>
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <input
                 type="text"
                 value={tempProductCode}
@@ -158,18 +158,21 @@ export default function GenerateWorkflowContent({
                 placeholder="Enter product code (3 letters)"
                 maxLength={3}
                 autoFocus
-                style={{ width: '150px', marginRight: '10px' }}
+                style={{ width: '100%' }}
               />
-              <button type="submit" className={styles.inlineButton} style={{ marginRight: '10px' }}>
-                Submit
-              </button>
-              <button 
-                type="button"
-                className={styles.choiceButton}
-                onClick={handleProductCodeSkip}
-              >
-                I don't know
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="submit" className={styles.inlineButton} style={{ flex: 1 }}>
+                  Submit
+                </button>
+                <button 
+                  type="button"
+                  className={styles.choiceButton}
+                  onClick={handleProductCodeSkip}
+                  style={{ flex: 1 }}
+                >
+                  I don't know
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -253,7 +256,17 @@ export default function GenerateWorkflowContent({
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleRetrySearch} className={styles.inlineForm}>
-              <div style={{ marginBottom: '10px' }}>
+              <input
+                type="text"
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                className={styles.inlineInput}
+                placeholder={searchType === 'keywords' ? 'Enter a more general device name' : 'Enter product code (3 letters)'}
+                required
+                autoFocus
+                maxLength={searchType === 'product-code' ? 3 : undefined}
+              />
+              <div style={{ margin: '10px 0', fontSize: '12px' }}>
                 <label style={{ marginRight: '20px' }}>
                   <input
                     type="radio"
@@ -275,16 +288,6 @@ export default function GenerateWorkflowContent({
                   Product Code
                 </label>
               </div>
-              <input
-                type="text"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                className={styles.inlineInput}
-                placeholder={searchType === 'keywords' ? 'Enter a more general device name' : 'Enter product code (3 letters)'}
-                required
-                autoFocus
-                maxLength={searchType === 'product-code' ? 3 : undefined}
-              />
               <button type="submit" className={styles.inlineButton}>
                 Search Again
               </button>
@@ -303,7 +306,14 @@ export default function GenerateWorkflowContent({
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleNewSearch} className={styles.searchAgainForm}>
-              <div style={{ marginBottom: '10px' }}>
+              <input
+                type="text"
+                defaultValue={productName}
+                className={styles.searchAgainInput}
+                placeholder={searchType === 'keywords' ? 'Enter a different device name to search again' : 'Enter product code (3 letters)'}
+                maxLength={searchType === 'product-code' ? 3 : undefined}
+              />
+              <div style={{ margin: '10px 0', fontSize: '12px' }}>
                 <label style={{ marginRight: '20px' }}>
                   <input
                     type="radio"
@@ -325,13 +335,6 @@ export default function GenerateWorkflowContent({
                   Product Code
                 </label>
               </div>
-              <input
-                type="text"
-                defaultValue={productName}
-                className={styles.searchAgainInput}
-                placeholder={searchType === 'keywords' ? 'Enter a different device name to search again' : 'Enter product code (3 letters)'}
-                maxLength={searchType === 'product-code' ? 3 : undefined}
-              />
               <button type="submit" className={styles.searchAgainButton}>
                 Search Again
               </button>

@@ -116,7 +116,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   useEffect(() => {
     if (initialProductName) {
       setProductName(initialProductName)
-      setCurrentStep('intended-use-question')
+      setCurrentStep('product-code-question')
       setMessageHistory([{
         id: '1',
         type: 'ai',
@@ -132,8 +132,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       }, {
         id: '3',
         type: 'ai',
-        content: `Thank you! Your device name is **${initialProductName}**.`,
-        step: 'intended-use-question',
+        content: `Do you know the FDA Product Code for this device?`,
+        step: 'product-code-question',
         timestamp: Date.now() + 2
       }])
     }
@@ -293,7 +293,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
   const handleNewSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    let newDeviceName = (e.target as HTMLFormElement).querySelector('input')?.value || productName
+    let newDeviceName = (e.target as HTMLFormElement).querySelector('input[type="text"]')?.value || productName
     newDeviceName = newDeviceName.trim()
     if (!newDeviceName) {
       return
