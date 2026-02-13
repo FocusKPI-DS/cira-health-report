@@ -69,6 +69,17 @@ export default function GenerateWorkflowContent({
     return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
 
+  const toRoman = (num: string | number): string => {
+    const n = typeof num === 'string' ? parseInt(num) : num
+    if (isNaN(n)) return String(num)
+    const romanNumerals: { [key: number]: string } = {
+      1: 'I',
+      2: 'II',
+      3: 'III'
+    }
+    return romanNumerals[n] || String(num)
+  }
+
   return (
     <div className={styles.workflow}>
       {/* Render message history */}
@@ -229,51 +240,122 @@ export default function GenerateWorkflowContent({
                 Search Again
               </button>
             </form>
-            <div className={styles.tableContainer}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th className={styles.th}>SELECT</th>
-                    <th className={styles.th}>PRODUCT CODE</th>
-                    <th className={styles.th}>DEVICE</th>
-                    <th className={styles.th}>REGULATION DESCRIPTION</th>
-                    <th className={styles.th}>MEDICAL SPECIALTY</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {similarProducts.map((product) => (
-                    <tr key={product.id} className={styles.tr}>
-                      <td className={styles.td}>
-                        <input
-                          type="checkbox"
-                          checked={selectedProducts.has(product.id)}
-                          onChange={() => handleToggleProduct(product.id)}
-                          className={styles.checkbox}
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <div className={styles.productCodeCell}>
-                          <span className={styles.productCode}>{product.productCode}</span>
-                          {product.fdaClassificationLink && (
-                            <a
-                              href={product.fdaClassificationLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={styles.fdaLink}
-                            >
-                              View FDA Classification →
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className={styles.td}>{product.device}</td>
-                      <td className={styles.td}>{product.regulationDescription}</td>
-                      <td className={styles.td}>{product.medicalSpecialty}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            
+            {/* Separate FDA and AI results */}
+            {(() => {
+              const fdaProducts = similarProducts.filter(p => p.source !== 'ai')
+              const aiProducts = similarProducts.filter(p => p.source === 'ai')
+              
+              return (
+                <>
+                  {/* FDA Results Table */}
+                  {fdaProducts.length > 0 && (
+                    <div className={styles.tableContainer}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.th}>SELECT</th>
+                            <th className={styles.th}>PRODUCT CODE</th>
+                            <th className={styles.th}>DEVICE</th>
+                            <th className={styles.th}>REGULATION DESCRIPTION</th>
+                            <th className={styles.th}>MEDICAL SPECIALTY</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fdaProducts.map((product) => (
+                            <tr key={product.id} className={styles.tr}>
+                              <td className={styles.td}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProducts.has(product.id)}
+                                  onChange={() => handleToggleProduct(product.id)}
+                                  className={styles.checkbox}
+                                />
+                              </td>
+                              <td className={styles.td}>
+                                <div className={styles.productCodeCell}>
+                                  <span className={styles.productCode}>{product.productCode}</span>
+                                  {product.fdaClassificationLink && (
+                                    <a
+                                      href={product.fdaClassificationLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={styles.fdaLink}
+                                    >
+                                      View FDA Classification →
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                              <td className={styles.td}>{product.device}</td>
+                              <td className={styles.td}>{product.regulationDescription}</td>
+                              <td className={styles.td}>{product.medicalSpecialty}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  
+                  {/* AI Results Table */}
+                  {aiProducts.length > 0 && (
+                    <div className={styles.tableContainer}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.th}>SELECT</th>
+                            <th className={styles.th}>AI Suggestions Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {aiProducts.map((product) => (
+                            <tr key={product.id} className={styles.tr}>
+                              <td className={styles.td} style={{ width: '80px', verticalAlign: 'top', paddingTop: '20px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProducts.has(product.id)}
+                                  onChange={() => handleToggleProduct(product.id)}
+                                  className={styles.checkbox}
+                                />
+                              </td>
+                              <td className={styles.td}>
+                                <div style={{ lineHeight: '1.6' }}>
+                                  <div>
+                                    <strong>Product Code:</strong> {product.productCode}
+                                    {product.fdaClassificationLink && (
+                                      <>
+                                        {'\u00A0\u00A0\u00A0'}
+                                        <a
+                                          href={product.fdaClassificationLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={styles.fdaLink}
+                                          style={{ fontSize: '12px' }}
+                                        >
+                                          View FDA Classification
+                                        </a>
+                                      </>
+                                    )}
+                                  </div>
+                                  {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
+                                  {product.regulationNumber && <div><strong>Regulation Number:</strong> 
+                                  <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`}
+                                   target="_blank" rel="noopener noreferrer" className={styles.fdaLink}
+                                  >{product.regulationNumber}</a></div>}
+                                  {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
+                                  {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+            
             <button 
               className={styles.generateButton}
               onClick={handleGenerateReport}

@@ -11,6 +11,10 @@ export interface SimilarProduct {
   fdaClassificationLink?: string
   similarity?: string
   source?: string
+  // AI-specific fields
+  deviceName?: string  // For AI results, deviceName is used instead of device
+  manufacturer?: string
+  reason?: string
 }
 
 export interface SeverityItem {

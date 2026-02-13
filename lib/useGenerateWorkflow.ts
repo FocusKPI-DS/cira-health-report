@@ -207,16 +207,26 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       
       const data = await response.json()
       
-      if (data.results && data.results.length > 0) {
-        setSimilarProducts(data.results)
+      // Check both fda_results and ai_results
+      const hasFdaResults = data.fda_results && data.fda_results.length > 0
+      const hasAiResults = data.ai_results && data.ai_results.length > 0
+      
+      if (hasFdaResults || hasAiResults) {
+        // Combine FDA and AI results
+        const combinedResults = [
+          ...(data.fda_results || []),
+          ...(data.ai_results || [])
+        ]
+        
+        setSimilarProducts(combinedResults)
         setProductsFound(true)
-        // Show different message based on data source
+        
+        // Show appropriate message based on data source
         let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (data.source === 'openai'||data.source === 'hybrid') {
-          message = 'No exact match found from FDA database. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
-        } else if (data.source === 'hybrid') {
-          message = 'No exact match found from FDA database. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
+        if (hasAiResults && !hasFdaResults) {
+          message = 'No exact match found from FDA database. Here are AI-suggested products based on medical device classifications. Please select the ones that fit the best:'
         }
+        
         addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
       } else {
@@ -264,16 +274,26 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       
       const data = await response.json()
       
-      if (data.results && data.results.length > 0) {
-        setSimilarProducts(data.results)
+      // Check both fda_results and ai_results
+      const hasFdaResults = data.fda_results && data.fda_results.length > 0
+      const hasAiResults = data.ai_results && data.ai_results.length > 0
+      
+      if (hasFdaResults || hasAiResults) {
+        // Combine FDA and AI results
+        const combinedResults = [
+          ...(data.fda_results || []),
+          ...(data.ai_results || [])
+        ]
+        
+        setSimilarProducts(combinedResults)
         setProductsFound(true)
-        // Show different message based on data source
+        
+        // Show appropriate message based on data source
         let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (data.source === 'openai'||data.source === 'hybrid') {
-          message = 'No exact match found from FDA database. Here are related products based on AI-suggested classifications. Please select the ones that fit the best:'
-        } else if (data.source === 'hybrid') {
-          message = 'No exact match found from FDA database. Here are related products based on AI classifications and similarity search. Please select the ones that fit the best:'
+        if (hasAiResults && !hasFdaResults) {
+          message = 'No exact match found from FDA database. Here are AI-suggested products based on medical device classifications. Please select the ones that fit the best:'
         }
+        
         addMessage('ai', message, 'similar-products')
         setCurrentStep('similar-products')
       } else {
@@ -364,14 +384,17 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     const similarProductsForBackend = selectedProductData.map(product => ({
       id: product.id,
       productCode: product.productCode,
-      device: product.device,
+      device: product.device || product.deviceName || '', // AI results use deviceName
       deviceClass: product.deviceClass,
-      regulationDescription: product.regulationDescription,
-      regulationMedicalSpecialty: product.medicalSpecialty,
+      regulationDescription: product.regulationDescription || product.deviceName || '',
+      regulationMedicalSpecialty: product.medicalSpecialty || '',
       regulationNumber: product.regulationNumber,
       classificationLink: product.fdaClassificationLink,
       similarity: product.similarity,
-      source: product.source || 'FDA'
+      source: product.source || 'FDA',
+      // Include AI-specific fields if present
+      ...(product.manufacturer && { manufacturer: product.manufacturer }),
+      ...(product.reason && { reason: product.reason })
     }))
     
     // If onStartSuccess is provided (results page), call the API without UI updates
