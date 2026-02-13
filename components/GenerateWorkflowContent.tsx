@@ -12,6 +12,8 @@ interface GenerateWorkflowContentProps {
   setIntendedUse: (use: string) => void
   selectedProducts: Set<string>
   similarProducts: SimilarProduct[]
+  fdaResultsText?: string
+  aiResultsText?: string
   workflowEndRef: React.RefObject<HTMLDivElement | null>
   handleDeviceNameSubmit: (e: React.FormEvent) => void
   handleProductCodeSubmit: (code: string) => void
@@ -39,6 +41,8 @@ export default function GenerateWorkflowContent({
   setIntendedUse,
   selectedProducts,
   similarProducts,
+  fdaResultsText,
+  aiResultsText,
   workflowEndRef,
   handleDeviceNameSubmit,
   handleProductCodeSubmit,
@@ -57,6 +61,11 @@ export default function GenerateWorkflowContent({
   setSearchType
 }: GenerateWorkflowContentProps) {
   const [tempProductCode, setTempProductCode] = useState('')
+  
+  // Debug: Log FDA and AI results text
+  console.log('[GenerateWorkflowContent] fdaResultsText:', fdaResultsText)
+  console.log('[GenerateWorkflowContent] aiResultsText:', aiResultsText)
+  console.log('[GenerateWorkflowContent] similarProducts:', similarProducts)
   
   const renderMessageContent = (message: Message) => {
     // Parse bold markdown
@@ -347,6 +356,13 @@ export default function GenerateWorkflowContent({
               
               return (
                 <>
+                  {/* FDA Results Text */}
+                  {fdaResultsText && fdaProducts.length > 0 && (
+                    <div style={{ marginTop: '20px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>
+                      {fdaResultsText}
+                    </div>
+                  )}
+                  
                   {/* FDA Results Table */}
                   {fdaProducts.length > 0 && (
                     <div className={styles.tableContainer}>
@@ -396,16 +412,23 @@ export default function GenerateWorkflowContent({
                     </div>
                   )}
                   
+                  {/* AI Results Text */}
+                  {aiResultsText && aiProducts.length > 0 && (
+                    <div style={{ marginTop: '20px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>
+                      {aiResultsText}
+                    </div>
+                  )}
+                  
                   {/* AI Results Table */}
                   {aiProducts.length > 0 && (
                     <div className={styles.tableContainer}>
                       <table className={styles.table}>
-                        <thead>
+                        {/*<thead>
                           <tr>
                             <th className={styles.th}>SELECT</th>
                             <th className={styles.th}>AI Suggestions Reason</th>
                           </tr>
-                        </thead>
+                        </thead>*/}
                         <tbody>
                           {aiProducts.map((product) => (
                             <tr key={product.id} className={styles.tr}>

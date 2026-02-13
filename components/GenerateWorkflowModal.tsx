@@ -70,6 +70,8 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
           setIntendedUse={workflow.setIntendedUse}
           selectedProducts={workflow.selectedProducts}
           similarProducts={workflow.similarProducts}
+          fdaResultsText={workflow.fdaResultsText}
+          aiResultsText={workflow.aiResultsText}
           workflowEndRef={workflow.workflowEndRef}
           handleDeviceNameSubmit={workflow.handleDeviceNameSubmit}
           handleProductCodeSubmit={workflow.handleProductCodeSubmit}

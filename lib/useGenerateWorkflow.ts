@@ -106,6 +106,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     timestamp: Date.now()
   }])
   const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([])
+  const [fdaResultsText, setFdaResultsText] = useState<string>('')
+  const [aiResultsText, setAiResultsText] = useState<string>('')
   const [isSearching, setIsSearching] = useState(false)
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -224,8 +226,16 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       
       const data = await response.json()
       
+      console.log('[performSearch] Response data:', data)
+      console.log('[performSearch] fda_results_text:', data.fda_results_text)
+      console.log('[performSearch] ai_results_text:', data.ai_results_text)
+      
       const hasFdaResults = data.fda_results && data.fda_results.length > 0
       const hasAiResults = data.ai_results && data.ai_results.length > 0
+      
+      // Save FDA and AI results text
+      setFdaResultsText(data.fda_results_text || '')
+      setAiResultsText(data.ai_results_text || '')
       
       if (hasFdaResults || hasAiResults) {
         const combinedResults = [
@@ -591,6 +601,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setSelectedProducts(new Set())
     setPreviousSelectedCount(0)
     setSimilarProducts([])
+    setFdaResultsText('')
+    setAiResultsText('')
     setIsSearching(false)
     setSearchType('keywords')
     setProductCode('')
@@ -614,6 +626,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setCurrentStep,
     selectedProducts,
     similarProducts,
+    fdaResultsText,
+    aiResultsText,
     isSearching,
     messageHistory,
     workflowEndRef,
