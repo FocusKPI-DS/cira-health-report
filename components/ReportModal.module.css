@@ -138,7 +138,7 @@
 
 .th {
   background: #f8fafc;
-  padding: 1rem;
+  padding: 0.65rem 1rem;
   text-align: left;
   font-weight: 600;
   color: #1e293b;
@@ -162,7 +162,7 @@
 }
 
 .td {
-  padding: 1rem;
+  padding: 0.1rem 1rem;
   color: #475569;
   vertical-align: middle;
   font-size: 0.875rem;
@@ -170,6 +170,11 @@
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+}
+
+.td:first-child {
+  padding: 1rem;
+  vertical-align: top;
 }
 
 .severityBadge {
