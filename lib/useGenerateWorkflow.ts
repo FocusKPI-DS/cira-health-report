@@ -293,7 +293,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
   const handleNewSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    let newDeviceName = (e.target as HTMLFormElement).querySelector('input[type="text"]')?.value || productName
+    const inputElement = (e.target as HTMLFormElement).querySelector('input[type="text"]') as HTMLInputElement
+    let newDeviceName = inputElement?.value || productName
     newDeviceName = newDeviceName.trim()
     if (!newDeviceName) {
       return
