@@ -115,6 +115,8 @@ function GenerateContent() {
           similarProducts={workflow.similarProducts}
           workflowEndRef={workflow.workflowEndRef}
           handleDeviceNameSubmit={workflow.handleDeviceNameSubmit}
+          handleProductCodeSubmit={workflow.handleProductCodeSubmit}
+          handleProductCodeSkip={workflow.handleProductCodeSkip}
           handleIntendedUseAnswer={workflow.handleIntendedUseAnswer}
           handleIntendedUseSubmit={workflow.handleIntendedUseSubmit}
           handleRetrySearch={workflow.handleRetrySearch}
@@ -124,6 +126,8 @@ function GenerateContent() {
           styles={styles}
           renderCompleted={renderCompleted}
           countdown={workflow.countdown}
+          searchType={workflow.searchType}
+          setSearchType={workflow.setSearchType}
         />
       </div>
 

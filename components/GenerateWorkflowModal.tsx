@@ -72,6 +72,8 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
           similarProducts={workflow.similarProducts}
           workflowEndRef={workflow.workflowEndRef}
           handleDeviceNameSubmit={workflow.handleDeviceNameSubmit}
+          handleProductCodeSubmit={workflow.handleProductCodeSubmit}
+          handleProductCodeSkip={workflow.handleProductCodeSkip}
           handleIntendedUseAnswer={workflow.handleIntendedUseAnswer}
           handleIntendedUseSubmit={workflow.handleIntendedUseSubmit}
           handleRetrySearch={workflow.handleRetrySearch}
@@ -80,6 +82,8 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
           handleGenerateReport={handleGenerateReport}
           isSubmitting={isSubmitting}
           styles={styles}
+          searchType={workflow.searchType}
+          setSearchType={workflow.setSearchType}
         />
       </div>
     </div>

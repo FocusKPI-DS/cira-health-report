@@ -41,6 +41,7 @@ export interface Hazard {
 
 export type WorkflowStep = 
   | 'device-name' 
+  | 'product-code-question'
   | 'intended-use-question' 
   | 'intended-use-input' 
   | 'searching-products' 

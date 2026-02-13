@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Message, WorkflowStep, SimilarProduct } from '@/lib/types'
 
 interface GenerateWorkflowContentProps {
@@ -13,6 +14,8 @@ interface GenerateWorkflowContentProps {
   similarProducts: SimilarProduct[]
   workflowEndRef: React.RefObject<HTMLDivElement | null>
   handleDeviceNameSubmit: (e: React.FormEvent) => void
+  handleProductCodeSubmit: (code: string) => void
+  handleProductCodeSkip: () => void
   handleIntendedUseAnswer: (hasIntendedUse: boolean) => void
   handleIntendedUseSubmit: (e: React.FormEvent) => void
   handleRetrySearch: (e?: React.FormEvent) => void
@@ -23,6 +26,8 @@ interface GenerateWorkflowContentProps {
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
   countdown?: number | null
+  searchType: 'keywords' | 'product-code'
+  setSearchType: (type: 'keywords' | 'product-code') => void
 }
 
 export default function GenerateWorkflowContent({
@@ -36,6 +41,8 @@ export default function GenerateWorkflowContent({
   similarProducts,
   workflowEndRef,
   handleDeviceNameSubmit,
+  handleProductCodeSubmit,
+  handleProductCodeSkip,
   handleIntendedUseAnswer,
   handleIntendedUseSubmit,
   handleRetrySearch,
@@ -45,8 +52,11 @@ export default function GenerateWorkflowContent({
   isSubmitting = false,
   styles,
   renderCompleted,
-  countdown
+  countdown,
+  searchType,
+  setSearchType
 }: GenerateWorkflowContentProps) {
+  const [tempProductCode, setTempProductCode] = useState('')
   
   const renderMessageContent = (message: Message) => {
     // Parse bold markdown
@@ -119,6 +129,46 @@ export default function GenerateWorkflowContent({
               />
               <button type="submit" className={styles.inlineButton}>
                 Submit
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Product Code Question Step */}
+      {currentStep === 'product-code-question' && (
+        <div className={styles.message}>
+          <div className={styles.messageHeader}>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
+          </div>
+          <div className={styles.messageContent}>
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              if (tempProductCode.trim()) {
+                handleProductCodeSubmit(tempProductCode)
+              }
+            }} className={styles.inlineForm}>
+              <input
+                type="text"
+                value={tempProductCode}
+                onChange={(e) => setTempProductCode(e.target.value.toUpperCase())}
+                className={styles.inlineInput}
+                placeholder="Enter product code (3 letters)"
+                maxLength={3}
+                autoFocus
+                style={{ width: '150px', marginRight: '10px' }}
+              />
+              <button type="submit" className={styles.inlineButton} style={{ marginRight: '10px' }}>
+                Submit
+              </button>
+              <button 
+                type="button"
+                className={styles.choiceButton}
+                onClick={handleProductCodeSkip}
+              >
+                I don't know
               </button>
             </form>
           </div>
@@ -203,14 +253,37 @@ export default function GenerateWorkflowContent({
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleRetrySearch} className={styles.inlineForm}>
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ marginRight: '20px' }}>
+                  <input
+                    type="radio"
+                    value="keywords"
+                    checked={searchType === 'keywords'}
+                    onChange={(e) => setSearchType('keywords')}
+                    style={{ marginRight: '5px' }}
+                  />
+                  Keywords
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    value="product-code"
+                    checked={searchType === 'product-code'}
+                    onChange={(e) => setSearchType('product-code')}
+                    style={{ marginRight: '5px' }}
+                  />
+                  Product Code
+                </label>
+              </div>
               <input
                 type="text"
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
                 className={styles.inlineInput}
-                placeholder="Enter a more general device name"
+                placeholder={searchType === 'keywords' ? 'Enter a more general device name' : 'Enter product code (3 letters)'}
                 required
                 autoFocus
+                maxLength={searchType === 'product-code' ? 3 : undefined}
               />
               <button type="submit" className={styles.inlineButton}>
                 Search Again
@@ -230,11 +303,34 @@ export default function GenerateWorkflowContent({
           </div>
           <div className={styles.messageContent}>
             <form onSubmit={handleNewSearch} className={styles.searchAgainForm}>
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ marginRight: '20px' }}>
+                  <input
+                    type="radio"
+                    value="keywords"
+                    checked={searchType === 'keywords'}
+                    onChange={(e) => setSearchType('keywords')}
+                    style={{ marginRight: '5px' }}
+                  />
+                  Keywords
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    value="product-code"
+                    checked={searchType === 'product-code'}
+                    onChange={(e) => setSearchType('product-code')}
+                    style={{ marginRight: '5px' }}
+                  />
+                  Product Code
+                </label>
+              </div>
               <input
                 type="text"
                 defaultValue={productName}
                 className={styles.searchAgainInput}
-                placeholder="Enter a different device name to search again"
+                placeholder={searchType === 'keywords' ? 'Enter a different device name to search again' : 'Enter product code (3 letters)'}
+                maxLength={searchType === 'product-code' ? 3 : undefined}
               />
               <button type="submit" className={styles.searchAgainButton}>
                 Search Again

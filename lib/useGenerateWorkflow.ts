@@ -96,6 +96,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
   const [previousSelectedCount, setPreviousSelectedCount] = useState(0)
   const [productsFound, setProductsFound] = useState(true)
+  const [searchType, setSearchType] = useState<'keywords' | 'product-code'>('keywords')
+  const [productCode, setProductCode] = useState('')
   const [messageHistory, setMessageHistory] = useState<Message[]>([{
     id: '1',
     type: 'ai',
@@ -157,9 +159,108 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     if (!productName.trim()) {
       return
     }
+    
+    // Always ask if user knows product code (keywords mode is default)
     addMessage('user', productName, 'device-name')
+    addMessage('ai', 'Do you know the FDA Product Code for this device?', 'product-code-question')
+    setCurrentStep('product-code-question')
+  }
+
+  const handleProductCodeSubmit = (code: string) => {
+    if (code.length !== 3) {
+      alert('Product code must be exactly 3 letters')
+      return
+    }
+    setProductCode(code.toUpperCase())
+    setSearchType('product-code')
+    setIntendedUse('') // Leave intended use empty
+    addMessage('user', code.toUpperCase(), 'product-code-question')
+    addMessage('ai', `Thank you! Your device name is **${productName}**.`, 'similar-products')
+    // Search by product code
+    performSearch(code.toUpperCase(), 'product-code')
+  }
+
+  const handleProductCodeSkip = () => {
+    addMessage('user', "I don't know", 'product-code-question')
     addMessage('ai', `Thank you! Your device name is **${productName}**.`, 'intended-use-question')
     setCurrentStep('intended-use-question')
+  }
+
+  // Unified search function that handles both keywords and product code search
+  const performSearch = async (query: string, type: 'keywords' | 'product-code') => {
+    setCurrentStep('searching-products')
+    setIsSearching(true)
+    
+    const searchMessage = type === 'product-code' 
+      ? `Searching for product code **${query}** in the FDA database...`
+      : 'First, I\'ll search for similar products in the FDA product classification database...'
+    addMessage('ai', searchMessage, 'searching-products')
+    
+    if (type === 'keywords') {
+      trackEvent('search_similar_product', {
+        product_name: query,
+        intended_use: intendedUse || undefined
+      })
+    }
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const params = new URLSearchParams({
+        search_type: type,
+        limit: '20'
+      })
+      
+      if (type === 'product-code') {
+        params.append('productCode', query)
+      } else {
+        params.append('deviceName', query)
+      }
+      
+      const response = await fetch(`${baseUrl}/api/v1/anonclient/search-fda-products?${params.toString()}`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to search FDA database')
+      }
+      
+      const data = await response.json()
+      
+      const hasFdaResults = data.fda_results && data.fda_results.length > 0
+      const hasAiResults = data.ai_results && data.ai_results.length > 0
+      
+      if (hasFdaResults || hasAiResults) {
+        const combinedResults = [
+          ...(data.fda_results || []),
+          ...(data.ai_results || [])
+        ]
+        
+        setSimilarProducts(combinedResults)
+        setProductsFound(true)
+        
+        let message = 'Following are the products I could find. Please select the ones that fit the best:'
+        if (hasAiResults && !hasFdaResults) {
+          message = 'No exact match found from FDA database. Here are AI-suggested products based on medical device classifications. Please select the ones that fit the best:'
+        }
+        
+        addMessage('ai', message, 'similar-products')
+        setCurrentStep('similar-products')
+      } else {
+        setSimilarProducts([])
+        setProductsFound(false)
+        const notFoundMessage = type === 'product-code'
+          ? `I couldn't find products for code "**${query}**". Please try searching by device name instead.`
+          : `I couldn't find similar products for "**${query}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`
+        addMessage('ai', notFoundMessage, 'no-products-found')
+        setCurrentStep('no-products-found')
+      }
+    } catch (error) {
+      console.error('[Search] Error:', error)
+      setSimilarProducts(mockSimilarProducts)
+      setProductsFound(true)
+      addMessage('ai', 'Following are the products I could find (using cached data). Please select the ones that fit the best:', 'similar-products')
+      setCurrentStep('similar-products')
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   const handleIntendedUseAnswer = (hasIntendedUse: boolean) => {
@@ -187,142 +288,73 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   }
 
   const handleSearchProducts = async () => {
-    setCurrentStep('searching-products')
-    setIsSearching(true)
-    addMessage('ai', 'First, I\'ll search for similar products in the FDA product classification database...', 'searching-products')
-    
-    trackEvent('search_similar_product', {
-      product_name: productName,
-      intended_use: intendedUse || undefined
-    })
-    
-    try {
-      // Call Python backend FDA search API
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${baseUrl}/api/v1/anonclient/search-fda-products?deviceName=${encodeURIComponent(productName)}&limit=20`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to search FDA database')
-      }
-      
-      const data = await response.json()
-      
-      // Check both fda_results and ai_results
-      const hasFdaResults = data.fda_results && data.fda_results.length > 0
-      const hasAiResults = data.ai_results && data.ai_results.length > 0
-      
-      if (hasFdaResults || hasAiResults) {
-        // Combine FDA and AI results
-        const combinedResults = [
-          ...(data.fda_results || []),
-          ...(data.ai_results || [])
-        ]
-        
-        setSimilarProducts(combinedResults)
-        setProductsFound(true)
-        
-        // Show appropriate message based on data source
-        let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (hasAiResults && !hasFdaResults) {
-          message = 'No exact match found from FDA database. Here are AI-suggested products based on medical device classifications. Please select the ones that fit the best:'
-        }
-        
-        addMessage('ai', message, 'similar-products')
-        setCurrentStep('similar-products')
-      } else {
-        setSimilarProducts([])
-        setProductsFound(false)
-        addMessage('ai', `I couldn't find similar products for "**${productName}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`, 'no-products-found')
-        setCurrentStep('no-products-found')
-      }
-    } catch (error) {
-      console.error('[Search Products] Error:', error)
-      // Fallback to mock data on error
-      setSimilarProducts(mockSimilarProducts)
-      setProductsFound(true)
-      addMessage('ai', 'Following are the products I could find (using cached data). Please select the ones that fit the best:', 'similar-products')
-      setCurrentStep('similar-products')
-    } finally {
-      setIsSearching(false)
-    }
+    await performSearch(productName, 'keywords')
   }
 
   const handleNewSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    const newDeviceName = (e.target as HTMLFormElement).querySelector('input')?.value || productName
-    if (!newDeviceName.trim()) {
+    let newDeviceName = (e.target as HTMLFormElement).querySelector('input')?.value || productName
+    newDeviceName = newDeviceName.trim()
+    if (!newDeviceName) {
       return
     }
     
+    // If product code mode, validate and search by code
+    if (searchType === 'product-code') {
+      if (newDeviceName.length !== 3) {
+        alert('Product code must be exactly 3 letters')
+        return
+      }
+      const code = newDeviceName.toUpperCase()
+      setProductCode(code)
+      setProductName(code)
+      setIntendedUse('') // Leave intended use empty
+      setSelectedProducts(new Set())
+      setPreviousSelectedCount(0)
+      setSimilarProducts([])
+      addMessage('user', code, 'similar-products')
+      await performSearch(code, 'product-code')
+      return
+    }
+    
+    // Keywords mode - search by device name
     setProductName(newDeviceName)
     setSelectedProducts(new Set())
     setPreviousSelectedCount(0)
     setSimilarProducts([])
     addMessage('user', newDeviceName, 'similar-products')
-    setCurrentStep('searching-products')
-    setIsSearching(true)
-    addMessage('ai', 'First, I\'ll search for similar products in the FDA product classification database...', 'searching-products')
-    
-    try {
-      // Call Python backend FDA search API
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${baseUrl}/api/v1/anonclient/search-fda-products?deviceName=${encodeURIComponent(newDeviceName)}&limit=20`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to search FDA database')
-      }
-      
-      const data = await response.json()
-      
-      // Check both fda_results and ai_results
-      const hasFdaResults = data.fda_results && data.fda_results.length > 0
-      const hasAiResults = data.ai_results && data.ai_results.length > 0
-      
-      if (hasFdaResults || hasAiResults) {
-        // Combine FDA and AI results
-        const combinedResults = [
-          ...(data.fda_results || []),
-          ...(data.ai_results || [])
-        ]
-        
-        setSimilarProducts(combinedResults)
-        setProductsFound(true)
-        
-        // Show appropriate message based on data source
-        let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (hasAiResults && !hasFdaResults) {
-          message = 'No exact match found from FDA database. Here are AI-suggested products based on medical device classifications. Please select the ones that fit the best:'
-        }
-        
-        addMessage('ai', message, 'similar-products')
-        setCurrentStep('similar-products')
-      } else {
-        setSimilarProducts([])
-        setProductsFound(false)
-        addMessage('ai', `I couldn't find similar products for "**${newDeviceName}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`, 'no-products-found')
-        setCurrentStep('no-products-found')
-      }
-    } catch (error) {
-      console.error('[New Search] Error:', error)
-      // Fallback to mock data on error
-      setSimilarProducts(mockSimilarProducts)
-      setProductsFound(true)
-      addMessage('ai', 'Following are the products I could find (using cached data). Please select the ones that fit the best:', 'similar-products')
-      setCurrentStep('similar-products')
-    } finally {
-      setIsSearching(false)
-    }
+    await performSearch(newDeviceName, 'keywords')
   }
 
   const handleRetrySearch = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault()
     }
-    if (!productName.trim()) {
+    
+    const trimmedProductName = productName.trim()
+    if (!trimmedProductName) {
       return
     }
-    addMessage('user', productName, 'no-products-found')
-    await handleSearchProducts()
+    
+    // If product code mode, validate and search by code
+    if (searchType === 'product-code') {
+      if (trimmedProductName.length !== 3) {
+        alert('Product code must be exactly 3 letters')
+        return
+      }
+      const code = trimmedProductName.toUpperCase()
+      setProductCode(code)
+      setProductName(code)
+      setIntendedUse('') // Leave intended use empty
+      addMessage('user', code, 'no-products-found')
+      await performSearch(code, 'product-code')
+      return
+    }
+    
+    // Keywords mode - search by device name
+    addMessage('user', trimmedProductName, 'no-products-found')
+    setProductName(trimmedProductName)
+    await performSearch(trimmedProductName, 'keywords')
   }
 
   const handleToggleProduct = (productId: string) => {
@@ -559,6 +591,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setPreviousSelectedCount(0)
     setSimilarProducts([])
     setIsSearching(false)
+    setSearchType('keywords')
+    setProductCode('')
     setMessageHistory([{
       id: '1',
       type: 'ai',
@@ -584,9 +618,15 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     workflowEndRef,
     analysisId,
     countdown,
+    searchType,
+    setSearchType,
+    productCode,
+    setProductCode,
     
     // Handlers
     handleDeviceNameSubmit,
+    handleProductCodeSubmit,
+    handleProductCodeSkip,
     handleIntendedUseAnswer,
     handleIntendedUseSubmit,
     handleSearchProducts,
