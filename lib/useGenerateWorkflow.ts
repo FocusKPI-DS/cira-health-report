@@ -113,6 +113,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const workflowEndRef = useRef<HTMLDivElement>(null)
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const shouldAutoScrollRef = useRef(true)
 
   // Initialize with product name if provided
   useEffect(() => {
@@ -143,7 +144,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    workflowEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (shouldAutoScrollRef.current) {
+      workflowEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+    // Reset the flag after each update
+    shouldAutoScrollRef.current = true
   }, [messageHistory, currentStep])
 
   const addMessage = (type: 'ai' | 'user', content: string, step?: WorkflowStep) => {
@@ -209,7 +214,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       const params = new URLSearchParams({
         search_type: type,
-        limit: '20'
+        limit: '10'
       })
       
       if (type === 'product-code') {
@@ -377,7 +382,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     }
     setSelectedProducts(newSelected)
     
-    // Add confirmation message when products are selected
+    // Update or add confirmation message when products are selected
     if (newSelected.size > 0 && (previousSelectedCount === 0 || newSelected.size !== previousSelectedCount)) {
       const selectedProductCodes = Array.from(newSelected)
         .map(id => {
@@ -387,10 +392,20 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         .filter(Boolean)
         .join(', ')
       
-      // Remove any previous selection messages
-      setMessageHistory(prev => prev.filter(msg => msg.step !== 'product-selection'))
+      // Disable auto-scroll for product selection updates
+      shouldAutoScrollRef.current = false
       
-      addMessage('user', `Selected: ${selectedProductCodes}`, 'product-selection')
+      // Update existing selection message or add new one
+      setMessageHistory(prev => {
+        const filtered = prev.filter(msg => msg.step !== 'product-selection')
+        return [...filtered, {
+          id: 'product-selection',
+          type: 'user' as const,
+          content: `Selected: ${selectedProductCodes}`,
+          step: 'product-selection' as WorkflowStep,
+          timestamp: Date.now()
+        }]
+      })
     }
     setPreviousSelectedCount(newSelected.size)
   }
