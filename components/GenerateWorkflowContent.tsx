@@ -1,108 +1,103 @@
 'use client'
 
-import { useState } from 'react'
-import { Message, WorkflowStep, SimilarProduct } from '@/lib/types'
+import { useState, useRef, useEffect } from 'react'
+import { Message, SimilarProduct } from '@/lib/types'
+import { CollectedParams, SearchResultSet } from '@/lib/useGenerateWorkflow'
 
 interface GenerateWorkflowContentProps {
-  messageHistory: Message[]
-  currentStep: WorkflowStep
-  productName: string
-  setProductName: (name: string) => void
-  intendedUse: string
-  setIntendedUse: (use: string) => void
-  selectedProducts: Set<string>
-  similarProducts: SimilarProduct[]
-  fdaResultsText?: string
-  aiResultsText?: string
+  messages: Message[]
+  suggestedOptions: string[]
+  searchResults: SearchResultSet | null
+  collected: CollectedParams
+  isReadyToStart: boolean
+  isLoading: boolean
+  phase: 'chat' | 'generating' | 'completed'
+  countdown: number | null
   workflowEndRef: React.RefObject<HTMLDivElement | null>
-  handleDeviceNameSubmit: (e: React.FormEvent) => void
-  handleProductCodeSubmit: (code: string) => void
-  handleProductCodeSkip: () => void
-  handleIntendedUseAnswer: (hasIntendedUse: boolean) => void
-  handleIntendedUseSubmit: (e: React.FormEvent) => void
-  handleRetrySearch: (e?: React.FormEvent) => void
-  handleNewSearch: (e: React.FormEvent) => void
-  handleToggleProduct: (productId: string) => void
-  handleGenerateReport: () => void
-  isSubmitting?: boolean
+  sendMessage: (text: string) => void
+  toggleProduct: (product: SimilarProduct) => void
+  retrySearch: (newName: string) => void
+  startAnalysisGeneration: () => void
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
-  countdown?: number | null
-  searchType: 'keywords' | 'product-code'
-  setSearchType: (type: 'keywords' | 'product-code') => void
 }
 
 export default function GenerateWorkflowContent({
-  messageHistory,
-  currentStep,
-  productName,
-  setProductName,
-  intendedUse,
-  setIntendedUse,
-  selectedProducts,
-  similarProducts,
-  fdaResultsText,
-  aiResultsText,
+  messages,
+  suggestedOptions,
+  searchResults,
+  collected,
+  isReadyToStart,
+  isLoading,
+  phase,
+  countdown,
   workflowEndRef,
-  handleDeviceNameSubmit,
-  handleProductCodeSubmit,
-  handleProductCodeSkip,
-  handleIntendedUseAnswer,
-  handleIntendedUseSubmit,
-  handleRetrySearch,
-  handleNewSearch,
-  handleToggleProduct,
-  handleGenerateReport,
-  isSubmitting = false,
+  sendMessage,
+  toggleProduct,
+  retrySearch,
+  startAnalysisGeneration,
   styles,
   renderCompleted,
-  countdown,
-  searchType,
-  setSearchType
 }: GenerateWorkflowContentProps) {
-  const [tempProductCode, setTempProductCode] = useState('')
-  
-  // Debug: Log FDA and AI results text
-  console.log('[GenerateWorkflowContent] fdaResultsText:', fdaResultsText)
-  console.log('[GenerateWorkflowContent] aiResultsText:', aiResultsText)
-  console.log('[GenerateWorkflowContent] similarProducts:', similarProducts)
-  
-  const renderMessageContent = (message: Message) => {
-    // Parse bold markdown
-    const parts = message.content.split(/(\*\*.*?\*\*)/g)
+  const [inputText, setInputText] = useState('')
+  const [retryInput, setRetryInput] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Focus input on mount
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = inputText.trim()
+    if (!text) return
+    setInputText('')
+    sendMessage(text)
+  }
+
+  const handleOptionClick = (option: string) => {
+    sendMessage(option)
+  }
+
+  const handleRetrySubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const q = retryInput.trim()
+    if (!q) return
+    setRetryInput('')
+    retrySearch(q)
+  }
+
+  const formatCountdown = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
+
+  const renderMessageContent = (content: string) => {
+    const parts = content.split(/(\*\*.*?\*\*)/g)
     return (
       <p>
-        {parts.map((part, index) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return <strong key={index}>{part.slice(2, -2)}</strong>
-          }
-          return <span key={index}>{part}</span>
-        })}
+        {parts.map((part, i) =>
+          part.startsWith('**') && part.endsWith('**')
+            ? <strong key={i}>{part.slice(2, -2)}</strong>
+            : <span key={i}>{part}</span>
+        )}
       </p>
     )
   }
 
-  const formatCountdown = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${minutes}:${secs.toString().padStart(2, '0')}`
+  const toRoman = (n: string | number) => {
+    const num = typeof n === 'string' ? parseInt(n) : n
+    return ({ 1: 'I', 2: 'II', 3: 'III' } as Record<number, string>)[num] ?? String(n)
   }
 
-  const toRoman = (num: string | number): string => {
-    const n = typeof num === 'string' ? parseInt(num) : num
-    if (isNaN(n)) return String(num)
-    const romanNumerals: { [key: number]: string } = {
-      1: 'I',
-      2: 'II',
-      3: 'III'
-    }
-    return romanNumerals[n] || String(num)
-  }
+  const fdaProducts = searchResults?.fdaResults ?? []
+  const aiProducts = searchResults?.aiResults ?? []
+  const hasSearchResults = fdaProducts.length > 0 || aiProducts.length > 0
+  const noResultsFound = searchResults !== null && !hasSearchResults
+  const selectedIds = new Set(collected.selectedProducts.map(p => p.id))
 
   return (
     <div className={styles.workflow}>
-      {/* Render message history */}
-      {messageHistory.map((message) => (
+      {/* ── Message history ── */}
+      {messages.map((message) => (
         <div key={message.id} className={styles.message}>
           {message.type === 'ai' && (
             <div className={styles.messageHeader}>
@@ -112,13 +107,13 @@ export default function GenerateWorkflowContent({
             </div>
           )}
           <div className={`${styles.messageContent} ${message.type === 'user' ? styles.userMessage : ''}`}>
-            {renderMessageContent(message)}
+            {renderMessageContent(message.content)}
           </div>
         </div>
       ))}
 
-      {/* Device Name Step */}
-      {currentStep === 'device-name' && (
+      {/* ── Suggested quick-reply options ── */}
+      {suggestedOptions.length > 0 && phase === 'chat' && !isLoading && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
             <div className={styles.aiAvatar}>
@@ -126,123 +121,23 @@ export default function GenerateWorkflowContent({
             </div>
           </div>
           <div className={styles.messageContent}>
-            <form onSubmit={handleDeviceNameSubmit} className={styles.inlineForm}>
-              <input
-                type="text"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                className={styles.inlineInput}
-                placeholder="Enter device name"
-                required
-                autoFocus
-              />
-              <button type="submit" className={styles.inlineButton}>
-                Submit
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Product Code Question Step */}
-      {currentStep === 'product-code-question' && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <form onSubmit={(e) => {
-              e.preventDefault()
-              if (tempProductCode.trim()) {
-                handleProductCodeSubmit(tempProductCode)
-              }
-            }} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <input
-                type="text"
-                value={tempProductCode}
-                onChange={(e) => setTempProductCode(e.target.value.toUpperCase())}
-                className={styles.inlineInput}
-                placeholder="Enter product code (3 letters)"
-                maxLength={3}
-                autoFocus
-                style={{ width: '100%' }}
-              />
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" className={styles.inlineButton} style={{ flex: 1 }}>
-                  Submit
-                </button>
-                <button 
-                  type="button"
-                  className={styles.choiceButton}
-                  onClick={handleProductCodeSkip}
-                  style={{ flex: 1 }}
-                >
-                  I don't know
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Intended Use Question Step */}
-      {currentStep === 'intended-use-question' && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <p>Do you have a more detailed intended use for this device?</p>
             <div className={styles.buttonGroup}>
-              <button 
-                className={styles.choiceButton}
-                onClick={() => handleIntendedUseAnswer(true)}
-              >
-                Yes
-              </button>
-              <button 
-                className={styles.choiceButton}
-                onClick={() => handleIntendedUseAnswer(false)}
-              >
-                No
-              </button>
+              {suggestedOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  className={styles.choiceButton}
+                  onClick={() => handleOptionClick(opt)}
+                >
+                  {opt}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Intended Use Input Step */}
-      {currentStep === 'intended-use-input' && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <form onSubmit={handleIntendedUseSubmit} className={styles.inlineForm}>
-              <textarea
-                value={intendedUse}
-                onChange={(e) => setIntendedUse(e.target.value)}
-                className={styles.inlineTextarea}
-                placeholder="Describe the intended use"
-                required
-                autoFocus
-              />
-              <button type="submit" className={styles.inlineButton}>
-                Submit
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Searching Products Step */}
-      {currentStep === 'searching-products' && (
+      {/* ── Loading indicator ── */}
+      {isLoading && phase === 'chat' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
             <div className={styles.aiAvatar}>
@@ -255,8 +150,8 @@ export default function GenerateWorkflowContent({
         </div>
       )}
 
-      {/* No Products Found Step */}
-      {currentStep === 'no-products-found' && (
+      {/* ── FDA Search results table ── */}
+      {hasSearchResults && phase === 'chat' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
             <div className={styles.aiAvatar}>
@@ -264,49 +159,160 @@ export default function GenerateWorkflowContent({
             </div>
           </div>
           <div className={styles.messageContent}>
-            <form onSubmit={handleRetrySearch} className={styles.inlineForm}>
+            {/* FDA results */}
+            {fdaProducts.length > 0 && (
+              <>
+                {searchResults?.fdaResultsText && (
+                  <div style={{ marginBottom: 10, fontSize: 14, color: '#666' }}>
+                    {searchResults.fdaResultsText}
+                  </div>
+                )}
+                <div className={styles.tableContainer}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th className={styles.th}>SELECT</th>
+                        <th className={styles.th}>PRODUCT CODE</th>
+                        <th className={styles.th}>DEVICE</th>
+                        <th className={styles.th}>REGULATION DESCRIPTION</th>
+                        <th className={styles.th}>MEDICAL SPECIALTY</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fdaProducts.map((product) => (
+                        <tr key={product.id} className={styles.tr}>
+                          <td className={styles.td}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(product.id)}
+                              onChange={() => toggleProduct(product)}
+                              className={styles.checkbox}
+                            />
+                          </td>
+                          <td className={styles.td}>
+                            <div className={styles.productCodeCell}>
+                              <span className={styles.productCode}>{product.productCode}</span>
+                              {product.fdaClassificationLink && (
+                                <a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
+                                  View FDA Classification →
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                          <td className={styles.td}>{product.device}</td>
+                          <td className={styles.td}>{product.regulationDescription}</td>
+                          <td className={styles.td}>{product.medicalSpecialty}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {/* AI results */}
+            {aiProducts.length > 0 && (
+              <>
+                {searchResults?.aiResultsText && (
+                  <div style={{ marginTop: 20, marginBottom: 10, fontSize: 14, color: '#666' }}>
+                    {searchResults.aiResultsText}
+                  </div>
+                )}
+                <div className={styles.tableContainer}>
+                  <table className={styles.table}>
+                    <tbody>
+                      {aiProducts.map((product) => (
+                        <tr key={product.id} className={styles.tr}>
+                          <td className={styles.td} style={{ width: 80, verticalAlign: 'top', paddingTop: 20 }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(product.id)}
+                              onChange={() => toggleProduct(product)}
+                              className={styles.checkbox}
+                            />
+                          </td>
+                          <td className={styles.td}>
+                            <div style={{ lineHeight: 1.6 }}>
+                              <div>
+                                <strong>Product Code:</strong> {product.productCode}
+                                {product.fdaClassificationLink && (
+                                  <>&nbsp;&nbsp;&nbsp;<a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} style={{ fontSize: 12 }}>View FDA Classification</a></>
+                                )}
+                              </div>
+                              {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
+                              {product.regulationNumber && (
+                                <div>
+                                  <strong>Regulation Number:</strong>&nbsp;
+                                  <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
+                                    {product.regulationNumber}
+                                  </a>
+                                </div>
+                              )}
+                              {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
+                              {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {/* Search again */}
+            <form onSubmit={handleRetrySubmit} className={styles.searchAgainForm} style={{ marginTop: 16 }}>
               <input
                 type="text"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                className={styles.inlineInput}
-                placeholder={searchType === 'keywords' ? 'Enter a more general device name' : 'Enter product code (3 letters)'}
-                required
-                autoFocus
-                maxLength={searchType === 'product-code' ? 3 : undefined}
+                value={retryInput}
+                onChange={e => setRetryInput(e.target.value)}
+                className={styles.searchAgainInput}
+                placeholder="Search again with a different name..."
               />
-              <div style={{ margin: '10px 0', fontSize: '12px' }}>
-                <label style={{ marginRight: '20px' }}>
-                  <input
-                    type="radio"
-                    value="keywords"
-                    checked={searchType === 'keywords'}
-                    onChange={(e) => setSearchType('keywords')}
-                    style={{ marginRight: '5px' }}
-                  />
-                  Keywords
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    value="product-code"
-                    checked={searchType === 'product-code'}
-                    onChange={(e) => setSearchType('product-code')}
-                    style={{ marginRight: '5px' }}
-                  />
-                  Product Code
-                </label>
-              </div>
-              <button type="submit" className={styles.inlineButton}>
-                Search Again
+              <button type="submit" className={styles.searchAgainButton}>Search Again</button>
+            </form>
+
+            {/* Generate button */}
+            {isReadyToStart && (
+              <button
+                className={styles.generateButton}
+                onClick={startAnalysisGeneration}
+                disabled={collected.selectedProducts.length === 0}
+                style={{ marginTop: 16 }}
+              >
+                Generate Report
               </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── No results: retry form ── */}
+      {noResultsFound && phase === 'chat' && (
+        <div className={styles.message}>
+          <div className={styles.messageHeader}>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
+          </div>
+          <div className={styles.messageContent}>
+            <form onSubmit={handleRetrySubmit} className={styles.inlineForm}>
+              <input
+                type="text"
+                value={retryInput}
+                onChange={e => setRetryInput(e.target.value)}
+                className={styles.inlineInput}
+                placeholder="Enter a more general device name"
+                autoFocus
+              />
+              <button type="submit" className={styles.inlineButton}>Search Again</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Similar Products Step */}
-      {currentStep === 'similar-products' && (
+      {/* ── Standalone Generate button (if ready but no search widget showing) ── */}
+      {isReadyToStart && !hasSearchResults && phase === 'chat' && collected.selectedProducts.length > 0 && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
             <div className={styles.aiAvatar}>
@@ -314,183 +320,15 @@ export default function GenerateWorkflowContent({
             </div>
           </div>
           <div className={styles.messageContent}>
-            <form onSubmit={handleNewSearch} className={styles.searchAgainForm}>
-              <input
-                type="text"
-                defaultValue={productName}
-                className={styles.searchAgainInput}
-                placeholder={searchType === 'keywords' ? 'Enter a different device name to search again' : 'Enter product code (3 letters)'}
-                maxLength={searchType === 'product-code' ? 3 : undefined}
-              />
-              <div style={{ margin: '10px 0', fontSize: '12px' }}>
-                <label style={{ marginRight: '20px' }}>
-                  <input
-                    type="radio"
-                    value="keywords"
-                    checked={searchType === 'keywords'}
-                    onChange={(e) => setSearchType('keywords')}
-                    style={{ marginRight: '5px' }}
-                  />
-                  Keywords
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    value="product-code"
-                    checked={searchType === 'product-code'}
-                    onChange={(e) => setSearchType('product-code')}
-                    style={{ marginRight: '5px' }}
-                  />
-                  Product Code
-                </label>
-              </div>
-              <button type="submit" className={styles.searchAgainButton}>
-                Search Again
-              </button>
-            </form>
-            
-            {/* Separate FDA and AI results */}
-            {(() => {
-              const fdaProducts = similarProducts.filter(p => p.source !== 'ai')
-              const aiProducts = similarProducts.filter(p => p.source === 'ai')
-              
-              return (
-                <>
-                  {/* FDA Results Text */}
-                  {fdaResultsText && fdaProducts.length > 0 && (
-                    <div style={{ marginTop: '20px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>
-                      {fdaResultsText}
-                    </div>
-                  )}
-                  
-                  {/* FDA Results Table */}
-                  {fdaProducts.length > 0 && (
-                    <div className={styles.tableContainer}>
-                      <table className={styles.table}>
-                        <thead>
-                          <tr>
-                            <th className={styles.th}>SELECT</th>
-                            <th className={styles.th}>PRODUCT CODE</th>
-                            <th className={styles.th}>DEVICE</th>
-                            <th className={styles.th}>REGULATION DESCRIPTION</th>
-                            <th className={styles.th}>MEDICAL SPECIALTY</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fdaProducts.map((product) => (
-                            <tr key={product.id} className={styles.tr}>
-                              <td className={styles.td}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedProducts.has(product.id)}
-                                  onChange={() => handleToggleProduct(product.id)}
-                                  className={styles.checkbox}
-                                />
-                              </td>
-                              <td className={styles.td}>
-                                <div className={styles.productCodeCell}>
-                                  <span className={styles.productCode}>{product.productCode}</span>
-                                  {product.fdaClassificationLink && (
-                                    <a
-                                      href={product.fdaClassificationLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className={styles.fdaLink}
-                                    >
-                                      View FDA Classification →
-                                    </a>
-                                  )}
-                                </div>
-                              </td>
-                              <td className={styles.td}>{product.device}</td>
-                              <td className={styles.td}>{product.regulationDescription}</td>
-                              <td className={styles.td}>{product.medicalSpecialty}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  
-                  {/* AI Results Text */}
-                  {aiResultsText && aiProducts.length > 0 && (
-                    <div style={{ marginTop: '20px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>
-                      {aiResultsText}
-                    </div>
-                  )}
-                  
-                  {/* AI Results Table */}
-                  {aiProducts.length > 0 && (
-                    <div className={styles.tableContainer}>
-                      <table className={styles.table}>
-                        {/*<thead>
-                          <tr>
-                            <th className={styles.th}>SELECT</th>
-                            <th className={styles.th}>AI Suggestions Reason</th>
-                          </tr>
-                        </thead>*/}
-                        <tbody>
-                          {aiProducts.map((product) => (
-                            <tr key={product.id} className={styles.tr}>
-                              <td className={styles.td} style={{ width: '80px', verticalAlign: 'top', paddingTop: '20px' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedProducts.has(product.id)}
-                                  onChange={() => handleToggleProduct(product.id)}
-                                  className={styles.checkbox}
-                                />
-                              </td>
-                              <td className={styles.td}>
-                                <div style={{ lineHeight: '1.6' }}>
-                                  <div>
-                                    <strong>Product Code:</strong> {product.productCode}
-                                    {product.fdaClassificationLink && (
-                                      <>
-                                        {'\u00A0\u00A0\u00A0'}
-                                        <a
-                                          href={product.fdaClassificationLink}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className={styles.fdaLink}
-                                          style={{ fontSize: '12px' }}
-                                        >
-                                          View FDA Classification
-                                        </a>
-                                      </>
-                                    )}
-                                  </div>
-                                  {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
-                                  {product.regulationNumber && <div><strong>Regulation Number:</strong> 
-                                  {'\u00A0'}<a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`}
-                                   target="_blank" rel="noopener noreferrer" className={styles.fdaLink}
-                                  >{product.regulationNumber}</a></div>}
-                                  {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
-                                  {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </>
-              )
-            })()}
-            
-            <button 
-              className={styles.generateButton}
-              onClick={handleGenerateReport}
-              disabled={selectedProducts.size === 0 || isSubmitting}
-            >
-              {isSubmitting ? 'Submitting...' : 'Generate Report'}
+            <button className={styles.generateButton} onClick={startAnalysisGeneration}>
+              Generate Report
             </button>
           </div>
         </div>
       )}
 
-      {/* Generating Step */}
-      {currentStep === 'generating' && (
+      {/* ── Generating phase ── */}
+      {phase === 'generating' && (
         <div className={styles.message}>
           <div className={styles.messageHeader}>
             <div className={styles.aiAvatar}>
@@ -500,20 +338,46 @@ export default function GenerateWorkflowContent({
           <div className={styles.messageContent}>
             <div className={styles.loading}>
               ⏳
-              {countdown !== null && countdown !== undefined && (
-                <span style={{ marginLeft: '8px', fontSize: '14px' }}>
-                  {formatCountdown(countdown)}
-                </span>
+              {countdown !== null && (
+                <span style={{ marginLeft: 8, fontSize: 14 }}>{formatCountdown(countdown)}</span>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Completed Step */}
-      {currentStep === 'completed' && renderCompleted && renderCompleted()}
+      {/* ── Completed phase ── */}
+      {phase === 'completed' && renderCompleted && renderCompleted()}
+
+      {/* ── Chat input (only in chat phase, right-aligned like a user message) ── */}
+      {phase === 'chat' && (
+        <div className={`${styles.message} ${styles.chatInputMessage}`}>
+          <div className={styles.messageContent}>
+            <form onSubmit={handleSubmit} className={styles.chatInputForm}>
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                onChange={e => setInputText(e.target.value)}
+                className={styles.inlineInput}
+                placeholder={isLoading ? 'Thinking...' : 'Type your message...'}
+                disabled={isLoading}
+                autoFocus
+              />
+              <button
+                type="submit"
+                className={styles.inlineButton}
+                disabled={isLoading || !inputText.trim()}
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div ref={workflowEndRef} />
     </div>
   )
 }
+

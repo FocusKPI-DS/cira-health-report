@@ -1,448 +1,354 @@
-import { useState, useEffect, useRef } from 'react'
-import { WorkflowStep, Message, SimilarProduct, Hazard } from './types'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { onAuthStateChanged } from 'firebase/auth'
+import { Message, SimilarProduct, Hazard } from './types'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 import { trackEvent } from './analytics'
+import { getAuthHeaders } from './api-utils'
+import { getFirebaseAuth } from './firebase'
 
-// Mock similar products data (fallback only)
-const mockSimilarProducts: SimilarProduct[] = [
-  {
-    id: '1',
-    productCode: 'FMF',
-    device: 'Syringe, Piston',
-    regulationDescription: 'Syringe, Piston',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5860'
-  },
-  {
-    id: '2',
-    productCode: 'MEG',
-    device: 'Syringe, Antistick',
-    regulationDescription: 'Syringe, Antistick',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5860'
-  },
-  {
-    id: '3',
-    productCode: 'FRN',
-    device: 'Pump, Infusion',
-    regulationDescription: 'Pump, Infusion',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5725'
-  },
-  {
-    id: '4',
-    productCode: 'DXT',
-    device: 'Injector And Syringe, Angiographic',
-    regulationDescription: 'Injector And Syringe, Angiographic',
-    medicalSpecialty: 'Cardiovascular',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=870.1200'
-  },
-  {
-    id: '5',
-    productCode: 'GAA',
-    device: 'Syringe, Disposable',
-    regulationDescription: 'Syringe, Disposable',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5860'
-  },
-  {
-    id: '6',
-    productCode: 'KGL',
-    device: 'Syringe, Glass',
-    regulationDescription: 'Syringe, Glass',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5860'
-  },
-  {
-    id: '7',
-    productCode: 'MMM',
-    device: 'Pump, Infusion, Insulin',
-    regulationDescription: 'Pump, Infusion, Insulin',
-    medicalSpecialty: 'Endocrinology',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5725'
-  },
-  {
-    id: '8',
-    productCode: 'NYY',
-    device: 'Syringe, Tubing',
-    regulationDescription: 'Syringe, Tubing',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5860'
-  },
-  {
-    id: '9',
-    productCode: 'OZS',
-    device: 'Pump, Infusion, Enteral',
-    regulationDescription: 'Pump, Infusion, Enteral',
-    medicalSpecialty: 'General Hospital',
-    fdaClassificationLink: 'https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfcfr/CFRSearch.cfm?FR=880.5725'
+/** Wait until Firebase has a signed-in user (anonymous or real). */
+function waitForAuth(timeoutMs = 10_000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const auth = getFirebaseAuth()
+    // Already signed in — resolve immediately
+    if (auth.currentUser) { resolve(); return }
+    const timer = setTimeout(() => {
+      unsub()
+      reject(new Error('Auth timeout — no Firebase user after ' + timeoutMs + 'ms'))
+    }, timeoutMs)
+    const unsub = onAuthStateChanged(auth, user => {
+      if (user) { clearTimeout(timer); unsub(); resolve() }
+    })
+  })
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface CollectedParams {
+  deviceName: string | null
+  /** Confirmed product codes after user selects from search results */
+  productCodes: string[]
+  /** null = not yet asked / addressed; '' = explicitly skipped */
+  intendedUse: string | null
+  /** Full product objects for the selected codes */
+  selectedProducts: SimilarProduct[]
+}
+
+export interface SearchResultSet {
+  fdaResults: SimilarProduct[]
+  aiResults: SimilarProduct[]
+  fdaResultsText: string
+  aiResultsText: string
+}
+
+/** What the /anonclient/chat endpoint returns */
+interface ChatResponse {
+  message: string
+  suggestedOptions: string[]
+  action: 'trigger_search' | 'use_product_code' | 'ready_to_start' | null
+  extractedParams: {
+    deviceName?: string
+    /** 3-letter FDA code the user said they already know — bypasses keyword search */
+    knownProductCode?: string
+    intendedUse?: string
+    intendedUseSkipped?: boolean
   }
-]
+}
+
+// ─── Options ──────────────────────────────────────────────────────────────────
 
 interface UseGenerateWorkflowOptions {
   initialProductName?: string
   onComplete?: (productName: string, intendedUse: string, hazards: Hazard[], analysisId: string) => void
-  onStartSuccess?: (analysisId: string, productName: string, intendedUse: string) => void // Called immediately after start-analysis succeeds
+  onStartSuccess?: (analysisId: string, productName: string, intendedUse: string) => void
   onPaymentRequired?: () => void
-  skipPaymentCheck?: boolean // For first-time users who can generate without payment
+  skipPaymentCheck?: boolean
 }
 
-export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
-  const { initialProductName = '', onComplete, onStartSuccess, onPaymentRequired, skipPaymentCheck = false } = options
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-  const [productName, setProductName] = useState(initialProductName)
-  const [intendedUse, setIntendedUse] = useState('')
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>('device-name')
-  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
-  const [previousSelectedCount, setPreviousSelectedCount] = useState(0)
-  const [productsFound, setProductsFound] = useState(true)
-  const [searchType, setSearchType] = useState<'keywords' | 'product-code'>('keywords')
-  const [productCode, setProductCode] = useState('')
-  const [messageHistory, setMessageHistory] = useState<Message[]>([{
-    id: '1',
-    type: 'ai',
-    content: `Hello! I'm here to help you generate a PHA Analysis. What is the name of your device?`,
-    step: 'device-name',
-    timestamp: Date.now()
-  }])
-  const [similarProducts, setSimilarProducts] = useState<SimilarProduct[]>([])
-  const [fdaResultsText, setFdaResultsText] = useState<string>('')
-  const [aiResultsText, setAiResultsText] = useState<string>('')
-  const [isSearching, setIsSearching] = useState(false)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
+  const { initialProductName = '', onComplete, onStartSuccess } = options
+
+  // ── Chat messages displayed in the UI ──
+  const [messages, setMessages] = useState<Message[]>([])
+  // ── Quick-reply buttons after the last AI message ──
+  const [suggestedOptions, setSuggestedOptions] = useState<string[]>([])
+  // ── Collected parameters ──
+  const [collected, setCollected] = useState<CollectedParams>({
+    deviceName: initialProductName || null,
+    productCodes: [],
+    intendedUse: null,
+    selectedProducts: [],
+  })
+  // ── FDA/AI search results to display as a table widget inside the chat ──
+  const [searchResults, setSearchResults] = useState<SearchResultSet | null>(null)
+  // ── Whether all required params are ready ──
+  const [isReadyToStart, setIsReadyToStart] = useState(false)
+  // ── Loading flag while waiting for AI reply or search ──
+  const [isLoading, setIsLoading] = useState(false)
+  // ── Analysis runtime state ──
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [phase, setPhase] = useState<'chat' | 'generating' | 'completed'>('chat')
+
   const workflowEndRef = useRef<HTMLDivElement>(null)
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const shouldAutoScrollRef = useRef(true)
+  const initializedRef = useRef(false)
 
-  // Initialize with product name if provided
+  // Auto-scroll on new messages
   useEffect(() => {
-    if (initialProductName) {
-      setProductName(initialProductName)
-      setCurrentStep('product-code-question')
-      setMessageHistory([{
-        id: '1',
-        type: 'ai',
-        content: `Hello! I'm here to help you generate a PHA Analysis. What is the name of your device?`,
-        step: 'device-name',
-        timestamp: Date.now()
-      }, {
-        id: '2',
-        type: 'user',
-        content: initialProductName,
-        step: 'device-name',
-        timestamp: Date.now() + 1
-      }, {
-        id: '3',
-        type: 'ai',
-        content: `Do you know the FDA Product Code for this device?`,
-        step: 'product-code-question',
-        timestamp: Date.now() + 2
-      }])
-    }
-  }, [initialProductName])
+    workflowEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, searchResults, phase])
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    if (shouldAutoScrollRef.current) {
-      workflowEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-    // Reset the flag after each update
-    shouldAutoScrollRef.current = true
-  }, [messageHistory, currentStep])
-
-  const addMessage = (type: 'ai' | 'user', content: string, step?: WorkflowStep) => {
-    setMessageHistory(prev => [...prev, {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+  // ── Helper: append a message ──
+  const appendMessage = useCallback((type: 'ai' | 'user', content: string) => {
+    setMessages(prev => [...prev, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       type,
       content,
-      step,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     }])
-  }
+  }, [])
 
-  const handleDeviceNameSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!productName.trim()) {
-      return
-    }
-    
-    // Always ask if user knows product code (keywords mode is default)
-    addMessage('user', productName, 'device-name')
-    addMessage('ai', 'Do you know the FDA Product Code for this device?', 'product-code-question')
-    setCurrentStep('product-code-question')
-  }
+  // ── Initial greeting (once) ──
+  useEffect(() => {
+    if (initializedRef.current) return
+    initializedRef.current = true
 
-  const handleProductCodeSubmit = (code: string) => {
-    if (code.length !== 3) {
-      alert('Product code must be exactly 3 letters')
-      return
-    }
-    setProductCode(code.toUpperCase())
-    setSearchType('product-code')
-    setIntendedUse('') // Leave intended use empty
-    addMessage('user', code.toUpperCase(), 'product-code-question')
-    addMessage('ai', `Thank you! Your device name is **${productName}**.`, 'similar-products')
-    // Search by product code
-    performSearch(code.toUpperCase(), 'product-code')
-  }
-
-  const handleProductCodeSkip = () => {
-    addMessage('user', "I don't know", 'product-code-question')
-    addMessage('ai', `Thank you! Your device name is **${productName}**.`, 'intended-use-question')
-    setCurrentStep('intended-use-question')
-  }
-
-  // Unified search function that handles both keywords and product code search
-  const performSearch = async (query: string, type: 'keywords' | 'product-code') => {
-    setCurrentStep('searching-products')
-    setIsSearching(true)
-    
-    const searchMessage = type === 'product-code' 
-      ? `Searching for product code **${query}** in the FDA database...`
-      : 'First, I\'ll search for similar products in the FDA product classification database...'
-    addMessage('ai', searchMessage, 'searching-products')
-    
-    if (type === 'keywords') {
-      trackEvent('search_similar_product', {
-        product_name: query,
-        intended_use: intendedUse || undefined
+    if (initialProductName) {
+      // If product name was pre-filled, kick off conversation with it after auth is ready
+      appendMessage('user', initialProductName)
+      waitForAuth().then(() => {
+        callChatApi(
+          [{ role: 'user', content: initialProductName }],
+          { deviceName: initialProductName, productCodes: [], intendedUse: null, selectedProducts: [] }
+        )
+      }).catch(err => {
+        console.error('[useGenerateWorkflow] Auth wait failed:', err)
+        appendMessage('ai', 'Authentication is taking longer than expected. Please refresh the page and try again.')
       })
+    } else {
+      appendMessage('ai', "Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.")
     }
-    
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Core: call /anonclient/chat and handle the response ──
+  const callChatApi = useCallback(async (
+    msgs: Array<{ role: string; content: string }>,
+    currentCollected: CollectedParams
+  ) => {
+    setIsLoading(true)
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const params = new URLSearchParams({
-        search_type: type,
-        limit: '10'
+      // Ensure Firebase auth is ready before fetching the token
+      await waitForAuth()
+      const headers = await getAuthHeaders()
+      const response = await fetch(`${API_URL}/api/v1/anonclient/chat`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: msgs,
+          collected: {
+            deviceName: currentCollected.deviceName,
+            productCodes: currentCollected.productCodes,
+            intendedUse: currentCollected.intendedUse,
+            selectedProducts: currentCollected.selectedProducts,
+          },
+        }),
       })
-      
-      if (type === 'product-code') {
-        params.append('productCode', query)
-      } else {
-        params.append('deviceName', query)
-      }
-      
-      const response = await fetch(`${baseUrl}/api/v1/anonclient/search-fda-products?${params.toString()}`)
-      
+
       if (!response.ok) {
-        throw new Error('Failed to search FDA database')
+        let errDetail = ''
+        try { const errBody = await response.json(); errDetail = errBody?.detail || JSON.stringify(errBody) } catch {}
+        console.error(`[Chat] API error ${response.status}:`, errDetail)
+        throw new Error(`${response.status}: ${errDetail || 'Unknown server error'}`)
       }
-      
-      const data = await response.json()
-      
-      console.log('[performSearch] Response data:', data)
-      console.log('[performSearch] fda_results_text:', data.fda_results_text)
-      console.log('[performSearch] ai_results_text:', data.ai_results_text)
-      
-      const hasFdaResults = data.fda_results && data.fda_results.length > 0
-      const hasAiResults = data.ai_results && data.ai_results.length > 0
-      
-      // Save FDA and AI results text
-      setFdaResultsText(data.fda_results_text || '')
-      setAiResultsText(data.ai_results_text || '')
-      
-      if (hasFdaResults || hasAiResults) {
-        const combinedResults = [
-          ...(data.fda_results || []),
-          ...(data.ai_results || [])
-        ]
-        
-        setSimilarProducts(combinedResults)
-        setProductsFound(true)
-        
-        let message = 'Following are the products I could find. Please select the ones that fit the best:'
-        if (hasAiResults && !hasFdaResults) {
-          message = 'No exact match found from FDA database. Here are AI-suggested products based on medical device classifications. Please select the ones that fit the best:'
+
+      const data: ChatResponse = await response.json()
+      console.log('[Chat] Response:', data)
+
+      // 1. Apply extracted params
+      let updatedCollected = { ...currentCollected }
+      if (data.extractedParams?.deviceName) {
+        updatedCollected.deviceName = data.extractedParams.deviceName
+      }
+      if (data.extractedParams?.intendedUse) {
+        updatedCollected.intendedUse = data.extractedParams.intendedUse
+      }
+      if (data.extractedParams?.intendedUseSkipped) {
+        updatedCollected.intendedUse = ''  // empty string = skipped
+      }
+
+      // 2. Handle action
+      if (data.action === 'trigger_search') {
+        setCollected(updatedCollected)
+        appendMessage('ai', data.message)
+        setSuggestedOptions([])
+        await performSearch(updatedCollected)
+        return
+      }
+
+      if (data.action === 'use_product_code') {
+        const code = data.extractedParams?.knownProductCode?.toUpperCase()
+        if (code) {
+          setCollected(updatedCollected)
+          appendMessage('ai', data.message)
+          setSuggestedOptions([])
+          await performSearch(updatedCollected, code)
+          return
         }
-        
-        addMessage('ai', message, 'similar-products')
-        setCurrentStep('similar-products')
-      } else {
-        setSimilarProducts([])
-        setProductsFound(false)
-        const notFoundMessage = type === 'product-code'
-          ? `I couldn't find products for code "**${query}**". Please try searching by device name instead.`
-          : `I couldn't find similar products for "**${query}**". Could you try modifying the product name? It usually needs to be a bit more general (e.g., instead of "XYZ Model 123 Syringe", try "Syringe" or "Medical Syringe").`
-        addMessage('ai', notFoundMessage, 'no-products-found')
-        setCurrentStep('no-products-found')
       }
-    } catch (error) {
-      console.error('[Search] Error:', error)
-      setSimilarProducts(mockSimilarProducts)
-      setProductsFound(true)
-      addMessage('ai', 'Following are the products I could find (using cached data). Please select the ones that fit the best:', 'similar-products')
-      setCurrentStep('similar-products')
+
+      if (data.action === 'ready_to_start') {
+        setIsReadyToStart(true)
+      }
+
+      setCollected(updatedCollected)
+      appendMessage('ai', data.message)
+      setSuggestedOptions(data.suggestedOptions ?? [])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[Chat] Error:', msg)
+      // Show a useful error if it's a known HTTP error, otherwise generic
+      const display = msg.startsWith('401')
+        ? 'Authentication failed. Please refresh the page and try again.'
+        : msg.startsWith('429')
+        ? 'Too many requests. Please wait a moment and try again.'
+        : msg.startsWith('5')
+        ? `Server error — ${msg}. Please try again.`
+        : 'Sorry, something went wrong. Please try again.'
+      appendMessage('ai', display)
+      setSuggestedOptions([])
     } finally {
-      setIsSearching(false)
+      setIsLoading(false)
     }
-  }
+  }, [appendMessage])
 
-  const handleIntendedUseAnswer = (hasIntendedUse: boolean) => {
-    addMessage('user', hasIntendedUse ? 'Yes' : 'No', 'intended-use-question')
-    
-    trackEvent(hasIntendedUse ? 'intended_use_yes' : 'intended_use_no', {
-      product_name: productName
+  // ── User sends a message (text input or quick-reply button) ──
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isLoading) return
+    setSuggestedOptions([])
+    appendMessage('user', text)
+
+    // Build conversation history for the API (all messages so far + new one)
+    const history = messages
+      .map(m => ({ role: m.type === 'ai' ? 'assistant' : 'user', content: m.content }))
+    history.push({ role: 'user', content: text })
+
+    await callChatApi(history, collected)
+  }, [messages, collected, isLoading, appendMessage, callChatApi])
+
+  // ── FDA product search ──
+  // Pass knownProductCode to search directly by 3-letter FDA code instead of by device name
+  const performSearch = useCallback(async (currentCollected: CollectedParams, knownProductCode?: string) => {
+    const deviceName = currentCollected.deviceName
+    if (!knownProductCode && !deviceName) return
+
+    setIsLoading(true)
+    try {
+      const params = knownProductCode
+        ? new URLSearchParams({
+            search_type: 'product-code',
+            productCode: knownProductCode.toUpperCase(),
+            limit: '10',
+          })
+        : new URLSearchParams({
+            search_type: 'keywords',
+            deviceName: deviceName!,
+            limit: '10',
+          })
+      const res = await fetch(`${API_URL}/api/v1/anonclient/search-fda-products?${params}`)
+      if (!res.ok) throw new Error('Search failed')
+
+      const data = await res.json()
+      const results: SearchResultSet = {
+        fdaResults: data.fda_results ?? [],
+        aiResults: data.ai_results ?? [],
+        fdaResultsText: data.fda_results_text ?? '',
+        aiResultsText: data.ai_results_text ?? '',
+      }
+      setSearchResults(results)
+
+      const totalFound = results.fdaResults.length + results.aiResults.length
+      const searchLabel = knownProductCode ? `product code "${knownProductCode}"` : `"${deviceName}"`
+      if (totalFound === 0) {
+        appendMessage('ai', `I couldn't find any products for ${searchLabel} in the FDA database. You can try a different ${knownProductCode ? 'code or device name' : 'name'}.`)
+      } else {
+        appendMessage('ai', `I found ${totalFound} product(s) in the FDA database. Please select the ones that best match your device, then click "Generate Report" when ready.`)
+      }
+      setSuggestedOptions([])
+    } catch (err) {
+      console.error('[Search] Error:', err)
+      appendMessage('ai', 'The FDA search encountered an error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [appendMessage])
+
+  // ── User toggles a product row in the search result table ──
+  const toggleProduct = useCallback((product: SimilarProduct) => {
+    setCollected(prev => {
+      const alreadySelected = prev.selectedProducts.some(p => p.id === product.id)
+      const newSelected = alreadySelected
+        ? prev.selectedProducts.filter(p => p.id !== product.id)
+        : [...prev.selectedProducts, product]
+      const newCodes = newSelected
+        .map(p => p.productCode)
+        .filter((c): c is string => Boolean(c))
+
+      // If user now has at least one code selected, mark ready
+      if (newCodes.length > 0) {
+        setIsReadyToStart(true)
+      } else {
+        setIsReadyToStart(false)
+      }
+
+      // If device name was never collected (user entered code directly), use the
+      // first selected product's device name so the analysis has a meaningful title.
+      const deviceName = prev.deviceName
+        ?? (newSelected[0]?.device || newSelected[0]?.deviceName || null)
+
+      return { ...prev, deviceName, selectedProducts: newSelected, productCodes: newCodes }
     })
-    
-    if (hasIntendedUse) {
-      addMessage('ai', 'Please describe the intended use of your device:', 'intended-use-input')
-        setCurrentStep('intended-use-input')
-    } else {
-      handleSearchProducts()
-    }
-  }
+  }, [])
 
-  const handleIntendedUseSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!intendedUse.trim()) {
-      return
-    }
-    addMessage('user', intendedUse, 'intended-use-input')
-    handleSearchProducts()
-  }
+  // ── Trigger a new search with a different query ──
+  const retrySearch = useCallback(async (newDeviceName: string) => {
+    const trimmed = newDeviceName.trim()
+    if (!trimmed) return
+    appendMessage('user', trimmed)
+    setSearchResults(null)
+    const updated = { ...collected, deviceName: trimmed }
+    setCollected(updated)
+    await performSearch(updated)
+  }, [collected, appendMessage, performSearch])
 
-  const handleSearchProducts = async () => {
-    await performSearch(productName, 'keywords')
-  }
+  // ── Start analysis generation (called after Generate Report is clicked) ──
+  const startAnalysisGeneration = useCallback(async () => {
+    if (collected.productCodes.length === 0) {
+      alert('Please select at least one product from the search results.')
+      return
+    }
 
-  const handleNewSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const inputElement = (e.target as HTMLFormElement).querySelector('input[type="text"]') as HTMLInputElement
-    let newDeviceName = inputElement?.value || productName
-    newDeviceName = newDeviceName.trim()
-    if (!newDeviceName) {
-      return
-    }
-    
-    // If product code mode, validate and search by code
-    if (searchType === 'product-code') {
-      if (newDeviceName.length !== 3) {
-        alert('Product code must be exactly 3 letters')
-        return
-      }
-      const code = newDeviceName.toUpperCase()
-      setProductCode(code)
-      setProductName(code)
-      setIntendedUse('') // Leave intended use empty
-      setSelectedProducts(new Set())
-      setPreviousSelectedCount(0)
-      setSimilarProducts([])
-      addMessage('user', code, 'similar-products')
-      await performSearch(code, 'product-code')
-      return
-    }
-    
-    // Keywords mode - search by device name
-    setProductName(newDeviceName)
-    setSelectedProducts(new Set())
-    setPreviousSelectedCount(0)
-    setSimilarProducts([])
-    addMessage('user', newDeviceName, 'similar-products')
-    await performSearch(newDeviceName, 'keywords')
-  }
+    const selectedProductData = collected.selectedProducts
+    const selectedProductCodes = collected.productCodes
 
-  const handleRetrySearch = async (e?: React.FormEvent) => {
-    if (e) {
-      e.preventDefault()
-    }
-    
-    const trimmedProductName = productName.trim()
-    if (!trimmedProductName) {
-      return
-    }
-    
-    // If product code mode, validate and search by code
-    if (searchType === 'product-code') {
-      if (trimmedProductName.length !== 3) {
-        alert('Product code must be exactly 3 letters')
-        return
-      }
-      const code = trimmedProductName.toUpperCase()
-      setProductCode(code)
-      setProductName(code)
-      setIntendedUse('') // Leave intended use empty
-      addMessage('user', code, 'no-products-found')
-      await performSearch(code, 'product-code')
-      return
-    }
-    
-    // Keywords mode - search by device name
-    addMessage('user', trimmedProductName, 'no-products-found')
-    setProductName(trimmedProductName)
-    await performSearch(trimmedProductName, 'keywords')
-  }
-
-  const handleToggleProduct = (productId: string) => {
-    const newSelected = new Set(selectedProducts)
-    if (newSelected.has(productId)) {
-      newSelected.delete(productId)
-    } else {
-      newSelected.add(productId)
-    }
-    setSelectedProducts(newSelected)
-    
-    // Update or add confirmation message when products are selected
-    if (newSelected.size > 0 && (previousSelectedCount === 0 || newSelected.size !== previousSelectedCount)) {
-      const selectedProductCodes = Array.from(newSelected)
-        .map(id => {
-          const product = similarProducts.find(p => p.id === id)
-          return product?.productCode
-        })
-        .filter(Boolean)
-        .join(', ')
-      
-      // Disable auto-scroll for product selection updates
-      shouldAutoScrollRef.current = false
-      
-      // Update existing selection message or add new one
-      setMessageHistory(prev => {
-        const filtered = prev.filter(msg => msg.step !== 'product-selection')
-        return [...filtered, {
-          id: 'product-selection',
-          type: 'user' as const,
-          content: `Selected: ${selectedProductCodes}`,
-          step: 'product-selection' as WorkflowStep,
-          timestamp: Date.now()
-        }]
-      })
-    }
-    setPreviousSelectedCount(newSelected.size)
-  }
-
-  // Internal function to actually start the analysis generation
-  const startAnalysisGeneration = async () => {
-    if (selectedProducts.size === 0) {
-      alert('Please select at least one product')
-      return
-    }
-    
-    // Get selected product codes and full product data
-    const selectedProductData = Array.from(selectedProducts)
-      .map(id => similarProducts.find(p => p.id === id))
-      .filter((product): product is SimilarProduct => Boolean(product))
-    
-    const selectedProductCodes = selectedProductData
-      .map(product => product.productCode)
-      .filter((code): code is string => Boolean(code))
-    
-    if (selectedProductCodes.length === 0) {
-      alert('No valid product codes selected')
-      return
-    }
-    
     trackEvent('generate_report', {
-      product_name: productName,
-      intended_use: intendedUse || undefined,
+      product_name: collected.deviceName || '',
+      intended_use: collected.intendedUse || undefined,
       selected_products_count: selectedProductCodes.length,
-      product_codes: selectedProductCodes.join(',')
+      product_codes: selectedProductCodes.join(','),
     })
-    
-    // Format similar products for backend (matching the expected structure)
+
+    // Build similar_products payload for backend (matching expected structure)
     const similarProductsForBackend = selectedProductData.map(product => ({
       id: product.id,
       productCode: product.productCode,
-      device: product.device || product.deviceName || '', // AI results use deviceName
+      device: product.device || product.deviceName || '',
       deviceClass: product.deviceClass,
       regulationDescription: product.regulationDescription || product.deviceName || '',
       regulationMedicalSpecialty: product.medicalSpecialty || '',
@@ -450,49 +356,35 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       classificationLink: product.fdaClassificationLink,
       similarity: product.similarity,
       source: product.source || 'FDA',
-      // Include AI-specific fields if present
       ...(product.manufacturer && { manufacturer: product.manufacturer }),
-      ...(product.reason && { reason: product.reason })
+      ...(product.reason && { reason: product.reason }),
     }))
-    
-    // If onStartSuccess is provided (results page), call the API without UI updates
-    // The parent component will handle modal closing and navigation
+
+    // If onStartSuccess is provided (results page), use the slim path
     if (onStartSuccess) {
       try {
-        // Call start-analysis API without polling
         const startResult = await analysisApi.startAnalysis(
           selectedProductCodes,
           similarProductsForBackend,
-          productName,
-          intendedUse || undefined
+          collected.deviceName || '',
+          collected.intendedUse || undefined
         )
-        
-        // Call onStartSuccess immediately with the returned analysis_id
-        onStartSuccess(startResult.analysis_id, productName, intendedUse)
-        return
+        onStartSuccess(startResult.analysis_id, collected.deviceName || '', collected.intendedUse || '')
       } catch (error) {
         console.error('[Analysis] Error starting analysis:', error)
         alert('Failed to start analysis. Please try again.')
-        return
       }
+      return
     }
-    
-    // For generate page (no onStartSuccess), show UI updates and poll
-    setCurrentStep('generating')
-    addMessage('ai', 'Generating your PHA Analysis report... This may take a few moments.', 'generating')
 
-    // Start 0.5-minute countdown (30 seconds)
+    // Generate page: show UI + poll
+    setPhase('generating')
     setCountdown(30)
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current)
-    }
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
     countdownIntervalRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev === null || prev <= 0) {
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current)
-            countdownIntervalRef.current = null
-          }
+          if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
           return null
         }
         return prev - 1
@@ -500,172 +392,84 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     }, 1000)
 
     try {
-      
-      // Call the backend API and poll for status
       const result = await analysisApi.startAnalysisAndPoll(
-        selectedProductCodes, // Pass selected product codes
-        similarProductsForBackend, // Pass complete similar products data
-        productName, // Pass the user-entered product name
-        intendedUse || undefined, // Pass intended use
+        selectedProductCodes,
+        similarProductsForBackend,
+        collected.deviceName || '',
+        collected.intendedUse || undefined,
         (status: AnalysisStatusResponse) => {
-          // Update message with status
-          console.log('[Analysis] Status update:', status.status, status.detail)
+          console.log('[Analysis] Status:', status.status, status.detail)
         },
-        5000 // Poll every 5 seconds
+        5000
       )
 
-      // Clear countdown when polling completes
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current)
-        countdownIntervalRef.current = null
-      }
+      if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
-
-      // Save analysis ID for later fetching results
       setAnalysisId(result.analysisId)
+      setPhase('completed')
 
-      if (result.status === 'Completed' || result.status === 'Failed') {
-        // Analysis finished - show completion message and let user view report
-        addMessage('ai', 'Your PHA Analysis has been completed! Click "View Report" to see the results.', 'completed')
-        setCurrentStep('completed')
-        
-        // Notify parent with empty hazards and analysisId - they'll be fetched when View Report is clicked
-        if (onComplete) {
-          onComplete(productName, intendedUse, [], result.analysisId)
-        }
-      } else {
-        // Other status (should not happen, but handle gracefully)
-        addMessage('ai', `Analysis status: ${result.status}. ${result.detail}`, 'completed')
-        setCurrentStep('completed')
+      if (onComplete) {
+        onComplete(collected.deviceName || '', collected.intendedUse || '', [], result.analysisId)
       }
     } catch (error) {
-      // Clear countdown on error
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current)
-        countdownIntervalRef.current = null
-      }
+      if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
-      
       console.error('[Analysis] Error:', error)
-      
-      // Check if payment was successful before showing retry option
-      // If payment was made, allow retry without new payment
-      addMessage('ai', 'An error occurred while generating the analysis. If you have already paid, you can retry without additional payment.', 'completed')
-      setCurrentStep('completed')
-      
-      // Show error but allow retry
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate analysis'
-      console.error('[Analysis] Generation error:', errorMessage)
-      
-      // Note: Retry can be handled by calling startAnalysisGeneration again
-      // The payment check will verify if payment was already made
+      setPhase('chat')
+      appendMessage('ai', 'An error occurred while generating the analysis. Please try again.')
     }
-  }
+  }, [collected, onStartSuccess, onComplete, appendMessage])
 
-  // Public handler that checks payment before generation
-  // NOTE: This should be overridden by parent component with payment check logic
-  const handleGenerateReport = async () => {
-    console.log('[Workflow] ===== handleGenerateReport CALLED (workflow hook) =====')
-    console.log('[Workflow] skipPaymentCheck:', skipPaymentCheck, 'onPaymentRequired:', !!onPaymentRequired)
-    
-    if (selectedProducts.size === 0) {
-      alert('Please select at least one product')
-      return
-    }
+  // ── Fetch report data after completion ──
+  const fetchReportData = useCallback(async (): Promise<Hazard[]> => {
+    if (!analysisId) throw new Error('No analysis ID available')
+    const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
+    if (!response.results || response.results.length === 0) throw new Error('No hazards found in the analysis')
+    return response.results
+  }, [analysisId])
 
-    // If skipPaymentCheck is true (first-time user), proceed directly
-    if (skipPaymentCheck) {
-      console.log('[Workflow] skipPaymentCheck is true, proceeding directly')
-      await startAnalysisGeneration()
-      return
-    }
-
-    // For returning users, check if payment is required
-    if (onPaymentRequired) {
-      console.log('[Workflow] Calling onPaymentRequired callback')
-      // Trigger payment modal - parent component will handle payment and call startAnalysisGeneration after success
-      onPaymentRequired()
-    } else {
-      console.log('[Workflow] No onPaymentRequired callback, proceeding directly (FALLBACK - THIS SHOULD NOT HAPPEN)')
-      // If no payment callback provided, proceed directly (fallback)
-      await startAnalysisGeneration()
-    }
-  }
-
-  const fetchReportData = async (): Promise<Hazard[]> => {
-    if (!analysisId) {
-      throw new Error('No analysis ID available')
-    }
-
-    try {
-      const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
-      if (!response.results || response.results.length === 0) {
-        throw new Error('No hazards found in the analysis')
-      }
-      return response.results
-    } catch (error) {
-      console.error('[Analysis] Error fetching results:', error)
-      throw error
-    }
-  }
-
-  const reset = () => {
-    setProductName('')
-    setIntendedUse('')
-    setCurrentStep('device-name')
-    setSelectedProducts(new Set())
-    setPreviousSelectedCount(0)
-    setSimilarProducts([])
-    setFdaResultsText('')
-    setAiResultsText('')
-    setIsSearching(false)
-    setSearchType('keywords')
-    setProductCode('')
-    setMessageHistory([{
+  // ── Reset everything ──
+  const reset = useCallback(() => {
+    setMessages([{
       id: '1',
       type: 'ai',
-      content: `Hello! I'm here to help you generate a PHA Analysis. What is the name of your device?`,
-      step: 'device-name',
-      timestamp: Date.now()
+      content: "Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.",
+      timestamp: Date.now(),
     }])
-    setProductsFound(true)
-  }
+    setSuggestedOptions([])
+    setCollected({ deviceName: null, productCodes: [], intendedUse: null, selectedProducts: [] })
+    setSearchResults(null)
+    setIsReadyToStart(false)
+    setAnalysisId(null)
+    setCountdown(null)
+    setPhase('chat')
+  }, [])
 
   return {
     // State
-    productName,
-    setProductName,
-    intendedUse,
-    setIntendedUse,
-    currentStep,
-    setCurrentStep,
-    selectedProducts,
-    similarProducts,
-    fdaResultsText,
-    aiResultsText,
-    isSearching,
-    messageHistory,
-    workflowEndRef,
+    messages,
+    suggestedOptions,
+    collected,
+    searchResults,
+    isReadyToStart,
+    isLoading,
     analysisId,
     countdown,
-    searchType,
-    setSearchType,
-    productCode,
-    setProductCode,
-    
-    // Handlers
-    handleDeviceNameSubmit,
-    handleProductCodeSubmit,
-    handleProductCodeSkip,
-    handleIntendedUseAnswer,
-    handleIntendedUseSubmit,
-    handleSearchProducts,
-    handleNewSearch,
-    handleRetrySearch,
-    handleToggleProduct,
-    handleGenerateReport,
-    startAnalysisGeneration, // Expose for calling after payment success
+    phase,
+    workflowEndRef,
+
+    // Actions
+    sendMessage,
+    toggleProduct,
+    retrySearch,
+    startAnalysisGeneration,
     fetchReportData,
-    reset
+    reset,
+
+    // Convenience aliases kept for backward compat with generate/page.tsx
+    productName: collected.deviceName || '',
+    intendedUse: collected.intendedUse || '',
   }
 }
+
+
