@@ -50,6 +50,14 @@ export default function GenerateWorkflowContent({
     inputRef.current?.focus()
   }, [])
 
+  // Clear input whenever a user message is added (handles auto-submit from hook)
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg?.type === 'user') {
+      setInputText('')
+    }
+  }, [messages.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const text = inputText.trim()

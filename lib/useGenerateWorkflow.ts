@@ -79,6 +79,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const workflowEndRef = useRef<HTMLDivElement>(null)
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const initializedRef = useRef(false)
+  const autoSubmittedRef = useRef(false)
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -325,6 +326,13 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     pushHistory(newHistory)
     await callAgent(newHistory)
   }, [isLoading, appendMessage, pushHistory, callAgent])
+
+  // ─── Auto-submit when productName is pre-filled via URL param ───────────────
+  useEffect(() => {
+    if (!initialProductName || autoSubmittedRef.current) return
+    autoSubmittedRef.current = true
+    sendMessage(initialProductName)
+  }, [sendMessage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Public: user confirms product selection → agent continues ──────────────
   // This replaces the old "startAnalysisGeneration" that would immediately launch
