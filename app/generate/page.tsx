@@ -71,8 +71,8 @@ function GenerateContent() {
       <div className={styles.container}>
         <GenerateWorkflowContent
           messages={workflow.messages}
-          suggestedOptions={workflow.suggestedOptions}
-          searchResults={workflow.searchResults}
+          latestSearchMsgId={workflow.latestSearchMsgId}
+          initialInputText={initialProductName || undefined}
           collected={workflow.collected}
           isReadyToStart={workflow.isReadyToStart}
           isLoading={workflow.isLoading}

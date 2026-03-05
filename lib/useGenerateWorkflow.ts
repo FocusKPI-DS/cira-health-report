@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
-import { Message, SimilarProduct, Hazard } from './types'
+import {
+  Message, SimilarProduct, Hazard, SearchResultSet,
+  AgentAction, AgentHistoryMessage, AgentResponse,
+  ShowProductsAction, StartAnalysisAction,
+} from './types'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 import { trackEvent } from './analytics'
 import { getAuthHeaders } from './api-utils'
@@ -10,7 +14,6 @@ import { getFirebaseAuth } from './firebase'
 function waitForAuth(timeoutMs = 10_000): Promise<void> {
   return new Promise((resolve, reject) => {
     const auth = getFirebaseAuth()
-    // Already signed in — resolve immediately
     if (auth.currentUser) { resolve(); return }
     const timer = setTimeout(() => {
       unsub()
@@ -26,33 +29,10 @@ function waitForAuth(timeoutMs = 10_000): Promise<void> {
 
 export interface CollectedParams {
   deviceName: string | null
-  /** Confirmed product codes after user selects from search results */
   productCodes: string[]
-  /** null = not yet asked / addressed; '' = explicitly skipped */
+  /** null = not yet asked; '' = explicitly skipped */
   intendedUse: string | null
-  /** Full product objects for the selected codes */
   selectedProducts: SimilarProduct[]
-}
-
-export interface SearchResultSet {
-  fdaResults: SimilarProduct[]
-  aiResults: SimilarProduct[]
-  fdaResultsText: string
-  aiResultsText: string
-}
-
-/** What the /anonclient/chat endpoint returns */
-interface ChatResponse {
-  message: string
-  suggestedOptions: string[]
-  action: 'trigger_search' | 'use_product_code' | 'ready_to_start' | null
-  extractedParams: {
-    deviceName?: string
-    /** 3-letter FDA code the user said they already know — bypasses keyword search */
-    knownProductCode?: string
-    intendedUse?: string
-    intendedUseSkipped?: boolean
-  }
 }
 
 // ─── Options ──────────────────────────────────────────────────────────────────
@@ -85,8 +65,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     intendedUse: null,
     selectedProducts: [],
   })
-  // ── FDA/AI search results to display as a table widget inside the chat ──
-  const [searchResults, setSearchResults] = useState<SearchResultSet | null>(null)
+  // ── Latest search results ID — used to detect the newest search message ──
+  const [latestSearchMsgId, setLatestSearchMsgId] = useState<string | null>(null)
   // ── Whether all required params are ready ──
   const [isReadyToStart, setIsReadyToStart] = useState(false)
   // ── Loading flag while waiting for AI reply or search ──
@@ -103,16 +83,24 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   // Auto-scroll on new messages
   useEffect(() => {
     workflowEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, searchResults, phase])
+  }, [messages, latestSearchMsgId, phase])
 
-  // ── Helper: append a message ──
-  const appendMessage = useCallback((type: 'ai' | 'user', content: string) => {
+  // ── Helper: append a message, optionally with embedded search results ──
+  const appendMessage = useCallback((
+    type: 'ai' | 'user',
+    content: string,
+    searchResultSet?: SearchResultSet,
+  ) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     setMessages(prev => [...prev, {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id,
       type,
       content,
       timestamp: Date.now(),
+      ...(searchResultSet ? { searchResultSet } : {}),
     }])
+    if (searchResultSet) setLatestSearchMsgId(id)
+    return id
   }, [])
 
   // ── Initial greeting (once) ──
@@ -121,231 +109,30 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     initializedRef.current = true
 
     if (initialProductName) {
-      // If product name was pre-filled, kick off conversation with it after auth is ready
-      appendMessage('user', initialProductName)
-      waitForAuth().then(() => {
-        callChatApi(
-          [{ role: 'user', content: initialProductName }],
-          { deviceName: initialProductName, productCodes: [], intendedUse: null, selectedProducts: [] }
-        )
-      }).catch(err => {
-        console.error('[useGenerateWorkflow] Auth wait failed:', err)
-        appendMessage('ai', 'Authentication is taking longer than expected. Please refresh the page and try again.')
-      })
+      // Product name was pre-filled (e.g. via ?productName=). Show a greeting and
+      // wait for the user to confirm — don't fire the API automatically.
+      appendMessage('ai', `I'm ready to help you generate a PHA Analysis for **${initialProductName}**. Press Send to search for matching FDA products, or type a different device name or product code.`)
     } else {
       appendMessage('ai', "Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.")
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Core: call /anonclient/chat and handle the response ──
-  const callChatApi = useCallback(async (
-    msgs: Array<{ role: string; content: string }>,
-    currentCollected: CollectedParams
-  ) => {
-    setIsLoading(true)
-    try {
-      // Ensure Firebase auth is ready before fetching the token
-      await waitForAuth()
-      const headers = await getAuthHeaders()
-      const response = await fetch(`${API_URL}/api/v1/anonclient/chat`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: msgs,
-          collected: {
-            deviceName: currentCollected.deviceName,
-            productCodes: currentCollected.productCodes,
-            intendedUse: currentCollected.intendedUse,
-            selectedProducts: currentCollected.selectedProducts,
-          },
-        }),
-      })
+  // ─── Agent history (internal, sent to /agent endpoint) ──────────────────────
+  const [agentHistory, setAgentHistory] = useState<AgentHistoryMessage[]>([])
+  // Use a ref alongside state so callbacks always see the latest value without
+  // needing it as a dependency (avoids stale-closure issues in async functions).
+  const agentHistoryRef = useRef<AgentHistoryMessage[]>([])
 
-      if (!response.ok) {
-        let errDetail = ''
-        try { const errBody = await response.json(); errDetail = errBody?.detail || JSON.stringify(errBody) } catch {}
-        console.error(`[Chat] API error ${response.status}:`, errDetail)
-        throw new Error(`${response.status}: ${errDetail || 'Unknown server error'}`)
-      }
-
-      const data: ChatResponse = await response.json()
-      console.log('[Chat] Response:', data)
-
-      // 1. Apply extracted params
-      let updatedCollected = { ...currentCollected }
-      if (data.extractedParams?.deviceName) {
-        updatedCollected.deviceName = data.extractedParams.deviceName
-      }
-      if (data.extractedParams?.intendedUse) {
-        updatedCollected.intendedUse = data.extractedParams.intendedUse
-      }
-      if (data.extractedParams?.intendedUseSkipped) {
-        updatedCollected.intendedUse = ''  // empty string = skipped
-      }
-
-      // 2. Handle action
-      if (data.action === 'trigger_search') {
-        setCollected(updatedCollected)
-        appendMessage('ai', data.message)
-        setSuggestedOptions([])
-        await performSearch(updatedCollected)
-        return
-      }
-
-      if (data.action === 'use_product_code') {
-        const code = data.extractedParams?.knownProductCode?.toUpperCase()
-        if (code) {
-          setCollected(updatedCollected)
-          appendMessage('ai', data.message)
-          setSuggestedOptions([])
-          await performSearch(updatedCollected, code)
-          return
-        }
-      }
-
-      if (data.action === 'ready_to_start') {
-        setIsReadyToStart(true)
-      }
-
-      setCollected(updatedCollected)
-      appendMessage('ai', data.message)
-      setSuggestedOptions(data.suggestedOptions ?? [])
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error('[Chat] Error:', msg)
-      // Show a useful error if it's a known HTTP error, otherwise generic
-      const display = msg.startsWith('401')
-        ? 'Authentication failed. Please refresh the page and try again.'
-        : msg.startsWith('429')
-        ? 'Too many requests. Please wait a moment and try again.'
-        : msg.startsWith('5')
-        ? `Server error — ${msg}. Please try again.`
-        : 'Sorry, something went wrong. Please try again.'
-      appendMessage('ai', display)
-      setSuggestedOptions([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [appendMessage])
-
-  // ── User sends a message (text input or quick-reply button) ──
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return
-    setSuggestedOptions([])
-    appendMessage('user', text)
-
-    // Build conversation history for the API (all messages so far + new one)
-    const history = messages
-      .map(m => ({ role: m.type === 'ai' ? 'assistant' : 'user', content: m.content }))
-    history.push({ role: 'user', content: text })
-
-    await callChatApi(history, collected)
-  }, [messages, collected, isLoading, appendMessage, callChatApi])
-
-  // ── FDA product search ──
-  // Pass knownProductCode to search directly by 3-letter FDA code instead of by device name
-  const performSearch = useCallback(async (currentCollected: CollectedParams, knownProductCode?: string) => {
-    const deviceName = currentCollected.deviceName
-    if (!knownProductCode && !deviceName) return
-
-    setIsLoading(true)
-    try {
-      const params = knownProductCode
-        ? new URLSearchParams({
-            search_type: 'product-code',
-            productCode: knownProductCode.toUpperCase(),
-            limit: '10',
-          })
-        : new URLSearchParams({
-            search_type: 'keywords',
-            deviceName: deviceName!,
-            limit: '10',
-          })
-      const res = await fetch(`${API_URL}/api/v1/anonclient/search-fda-products?${params}`)
-      if (!res.ok) throw new Error('Search failed')
-
-      const data = await res.json()
-      const results: SearchResultSet = {
-        fdaResults: data.fda_results ?? [],
-        aiResults: data.ai_results ?? [],
-        fdaResultsText: data.fda_results_text ?? '',
-        aiResultsText: data.ai_results_text ?? '',
-      }
-      setSearchResults(results)
-
-      const totalFound = results.fdaResults.length + results.aiResults.length
-      const searchLabel = knownProductCode ? `product code "${knownProductCode}"` : `"${deviceName}"`
-      if (totalFound === 0) {
-        appendMessage('ai', `I couldn't find any products for ${searchLabel} in the FDA database. You can try a different ${knownProductCode ? 'code or device name' : 'name'}.`)
-      } else {
-        appendMessage('ai', `I found ${totalFound} product(s) in the FDA database. Please select the ones that best match your device, then click "Generate Report" when ready.`)
-      }
-      setSuggestedOptions([])
-    } catch (err) {
-      console.error('[Search] Error:', err)
-      appendMessage('ai', 'The FDA search encountered an error. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [appendMessage])
-
-  // ── User toggles a product row in the search result table ──
-  const toggleProduct = useCallback((product: SimilarProduct) => {
-    setCollected(prev => {
-      const alreadySelected = prev.selectedProducts.some(p => p.id === product.id)
-      const newSelected = alreadySelected
-        ? prev.selectedProducts.filter(p => p.id !== product.id)
-        : [...prev.selectedProducts, product]
-      const newCodes = newSelected
-        .map(p => p.productCode)
-        .filter((c): c is string => Boolean(c))
-
-      // If user now has at least one code selected, mark ready
-      if (newCodes.length > 0) {
-        setIsReadyToStart(true)
-      } else {
-        setIsReadyToStart(false)
-      }
-
-      // If device name was never collected (user entered code directly), use the
-      // first selected product's device name so the analysis has a meaningful title.
-      const deviceName = prev.deviceName
-        ?? (newSelected[0]?.device || newSelected[0]?.deviceName || null)
-
-      return { ...prev, deviceName, selectedProducts: newSelected, productCodes: newCodes }
-    })
+  const pushHistory = useCallback((msgs: AgentHistoryMessage[]) => {
+    agentHistoryRef.current = msgs
+    setAgentHistory(msgs)
   }, [])
 
-  // ── Trigger a new search with a different query ──
-  const retrySearch = useCallback(async (newDeviceName: string) => {
-    const trimmed = newDeviceName.trim()
-    if (!trimmed) return
-    appendMessage('user', trimmed)
-    setSearchResults(null)
-    const updated = { ...collected, deviceName: trimmed }
-    setCollected(updated)
-    await performSearch(updated)
-  }, [collected, appendMessage, performSearch])
+  // ─── startAnalysisGenerationWith — unchanged execution logic ─────────────────
+  const startAnalysisGenerationWith = useCallback(async (data: CollectedParams) => {
+    if (data.productCodes.length === 0) return
 
-  // ── Start analysis generation (called after Generate Report is clicked) ──
-  const startAnalysisGeneration = useCallback(async () => {
-    if (collected.productCodes.length === 0) {
-      alert('Please select at least one product from the search results.')
-      return
-    }
-
-    const selectedProductData = collected.selectedProducts
-    const selectedProductCodes = collected.productCodes
-
-    trackEvent('generate_report', {
-      product_name: collected.deviceName || '',
-      intended_use: collected.intendedUse || undefined,
-      selected_products_count: selectedProductCodes.length,
-      product_codes: selectedProductCodes.join(','),
-    })
-
-    // Build similar_products payload for backend (matching expected structure)
-    const similarProductsForBackend = selectedProductData.map(product => ({
+    const similarProductsForBackend = data.selectedProducts.map(product => ({
       id: product.id,
       productCode: product.productCode,
       device: product.device || product.deviceName || '',
@@ -360,24 +147,22 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       ...(product.reason && { reason: product.reason }),
     }))
 
-    // If onStartSuccess is provided (results page), use the slim path
     if (onStartSuccess) {
       try {
         const startResult = await analysisApi.startAnalysis(
-          selectedProductCodes,
+          data.productCodes,
           similarProductsForBackend,
-          collected.deviceName || '',
-          collected.intendedUse || undefined
+          data.deviceName || '',
+          data.intendedUse || undefined,
         )
-        onStartSuccess(startResult.analysis_id, collected.deviceName || '', collected.intendedUse || '')
+        onStartSuccess(startResult.analysis_id, data.deviceName || '', data.intendedUse || '')
       } catch (error) {
         console.error('[Analysis] Error starting analysis:', error)
-        alert('Failed to start analysis. Please try again.')
+        appendMessage('ai', 'Failed to start analysis. Please try again.')
       }
       return
     }
 
-    // Generate page: show UI + poll
     setPhase('generating')
     setCountdown(30)
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
@@ -393,24 +178,20 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
     try {
       const result = await analysisApi.startAnalysisAndPoll(
-        selectedProductCodes,
+        data.productCodes,
         similarProductsForBackend,
-        collected.deviceName || '',
-        collected.intendedUse || undefined,
+        data.deviceName || '',
+        data.intendedUse || undefined,
         (status: AnalysisStatusResponse) => {
           console.log('[Analysis] Status:', status.status, status.detail)
         },
-        5000
+        5000,
       )
-
       if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
       setAnalysisId(result.analysisId)
       setPhase('completed')
-
-      if (onComplete) {
-        onComplete(collected.deviceName || '', collected.intendedUse || '', [], result.analysisId)
-      }
+      if (onComplete) onComplete(data.deviceName || '', data.intendedUse || '', [], result.analysisId)
     } catch (error) {
       if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
@@ -418,9 +199,196 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       setPhase('chat')
       appendMessage('ai', 'An error occurred while generating the analysis. Please try again.')
     }
-  }, [collected, onStartSuccess, onComplete, appendMessage])
+  }, [onStartSuccess, onComplete, appendMessage]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Fetch report data after completion ──
+  // ─── Handle the action returned by the agent ─────────────────────────────────
+  // selectedProductsRef lets handleAction read the latest selected products without
+  // adding them as a useCallback dependency (would cause a re-render loop).
+  const selectedProductsRef = useRef<SimilarProduct[]>([])
+
+  const handleAction = useCallback(async (action: AgentAction) => {
+    switch (action.type) {
+      case 'ask':
+      case 'message': {
+        appendMessage('ai', action.message)
+        setSuggestedOptions(action.suggestions ?? [])
+        break
+      }
+
+      case 'show_products': {
+        const a = action as ShowProductsAction
+        const resultSet: SearchResultSet = {
+          fdaResults: a.fda_results ?? [],
+          aiResults: a.ai_results ?? [],
+          fdaResultsText: a.fda_results_text ?? '',
+          aiResultsText: a.ai_results_text ?? '',
+        }
+        appendMessage('ai', a.message, resultSet)
+        setSuggestedOptions([])
+        break
+      }
+
+      case 'start_analysis': {
+        const a = action as StartAnalysisAction
+        if (a.message) appendMessage('ai', a.message)
+        setSuggestedOptions([])
+
+        const collectedForAnalysis: CollectedParams = {
+          deviceName: a.product_name,
+          productCodes: a.product_codes,
+          intendedUse: a.intended_use ?? '',
+          selectedProducts: selectedProductsRef.current,
+        }
+
+        trackEvent('generate_report', {
+          product_name: a.product_name,
+          intended_use: a.intended_use || undefined,
+          selected_products_count: selectedProductsRef.current.length,
+          product_codes: a.product_codes.join(','),
+        })
+
+        // Update collected so productName / intendedUse aliases are correct
+        setCollected(prev => ({
+          ...prev,
+          deviceName: a.product_name,
+          productCodes: a.product_codes,
+          intendedUse: a.intended_use ?? '',
+        }))
+
+        await startAnalysisGenerationWith(collectedForAnalysis)
+        break
+      }
+
+      case 'error': {
+        appendMessage('ai', action.message)
+        setSuggestedOptions([])
+        break
+      }
+    }
+  }, [appendMessage, startAnalysisGenerationWith])
+
+  // ─── Core agent call ─────────────────────────────────────────────────────────
+  const callAgent = useCallback(async (history: AgentHistoryMessage[]) => {
+    setIsLoading(true)
+    try {
+      await waitForAuth()
+      const headers = await getAuthHeaders()
+      const response = await fetch(`${API_URL}/api/v1/anonclient/agent`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history }),
+      })
+
+      if (!response.ok) {
+        let detail = ''
+        try { const body = await response.json(); detail = body?.detail || JSON.stringify(body) } catch {}
+        throw new Error(`${response.status}: ${detail || 'Unknown server error'}`)
+      }
+
+      const data: AgentResponse = await response.json()
+      console.log('[Agent] Response:', data)
+
+      // Append assistant action into history
+      const newHistory: AgentHistoryMessage[] = [
+        ...history,
+        { role: 'assistant', action: data.action },
+      ]
+      pushHistory(newHistory)
+
+      await handleAction(data.action)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[Agent] Error:', msg)
+      const display = msg.startsWith('401')
+        ? 'Authentication failed. Please refresh the page and try again.'
+        : msg.startsWith('429')
+        ? 'Too many requests. Please wait a moment and try again.'
+        : msg.startsWith('5') || msg.startsWith('50')
+        ? `Server error — ${msg}. Please try again.`
+        : 'Sorry, something went wrong. Please try again.'
+      appendMessage('ai', display)
+      setSuggestedOptions([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [appendMessage, handleAction, pushHistory])
+
+  // ─── Public: user sends a text message ───────────────────────────────────────
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isLoading) return
+    const trimmed = text.trim()
+    setSuggestedOptions([])
+    appendMessage('user', trimmed)
+
+    const newHistory: AgentHistoryMessage[] = [
+      ...agentHistoryRef.current,
+      { role: 'user', content: trimmed },
+    ]
+    pushHistory(newHistory)
+    await callAgent(newHistory)
+  }, [isLoading, appendMessage, pushHistory, callAgent])
+
+  // ─── Public: user confirms product selection → agent continues ──────────────
+  // This replaces the old "startAnalysisGeneration" that would immediately launch
+  // the analysis. Now it passes the selection to the agent, which will ask for
+  // intended_use and then return start_analysis.
+  const startAnalysisGeneration = useCallback(async () => {
+    const selected = selectedProductsRef.current
+    if (selected.length === 0) {
+      alert('Please select at least one product from the search results.')
+      return
+    }
+
+    const codes = selected.map(p => p.productCode).filter(Boolean) as string[]
+    const deviceName = collected.deviceName ?? (selected[0]?.device || selected[0]?.deviceName || '')
+
+    setSuggestedOptions([])
+
+    const toolResult: AgentHistoryMessage = {
+      role: 'tool_result',
+      tool: 'user_selected_products',
+      data: {
+        product_codes: codes,
+        device_name: deviceName,
+        count: selected.length,
+      },
+    }
+
+    const newHistory: AgentHistoryMessage[] = [...agentHistoryRef.current, toolResult]
+    pushHistory(newHistory)
+    await callAgent(newHistory)
+  }, [collected.deviceName, pushHistory, callAgent])
+
+  // ─── Public: toggle product checkbox ────────────────────────────────────────
+  const toggleProduct = useCallback((product: SimilarProduct) => {
+    setCollected(prev => {
+      const alreadySelected = prev.selectedProducts.some(p => p.id === product.id)
+      const newSelected = alreadySelected
+        ? prev.selectedProducts.filter(p => p.id !== product.id)
+        : [...prev.selectedProducts, product]
+      const newCodes = newSelected
+        .map(p => p.productCode)
+        .filter((c): c is string => Boolean(c))
+
+      // Keep ref in sync for handleAction
+      selectedProductsRef.current = newSelected
+      setIsReadyToStart(newCodes.length > 0)
+
+      const deviceName = prev.deviceName
+        ?? (newSelected[0]?.device || newSelected[0]?.deviceName || null)
+
+      return { ...prev, deviceName, selectedProducts: newSelected, productCodes: newCodes }
+    })
+  }, [])
+
+  // ─── Public: retry search (just send as new user message) ───────────────────
+  const retrySearch = useCallback(async (newDeviceName: string) => {
+    const trimmed = newDeviceName.trim()
+    if (!trimmed) return
+    await sendMessage(trimmed)
+  }, [sendMessage])
+
+  // ─── Fetch report data after completion ─────────────────────────────────────
   const fetchReportData = useCallback(async (): Promise<Hazard[]> => {
     if (!analysisId) throw new Error('No analysis ID available')
     const response = await analysisApi.getAnalysisResults(analysisId, 1, 100)
@@ -428,7 +396,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     return response.results
   }, [analysisId])
 
-  // ── Reset everything ──
+  // ─── Reset everything ────────────────────────────────────────────────────────
   const reset = useCallback(() => {
     setMessages([{
       id: '1',
@@ -438,38 +406,33 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     }])
     setSuggestedOptions([])
     setCollected({ deviceName: null, productCodes: [], intendedUse: null, selectedProducts: [] })
-    setSearchResults(null)
+    setLatestSearchMsgId(null)
     setIsReadyToStart(false)
     setAnalysisId(null)
     setCountdown(null)
     setPhase('chat')
-  }, [])
+    pushHistory([])
+    selectedProductsRef.current = []
+  }, [pushHistory])
 
   return {
-    // State
     messages,
     suggestedOptions,
     collected,
-    searchResults,
+    latestSearchMsgId,
     isReadyToStart,
     isLoading,
     analysisId,
     countdown,
     phase,
     workflowEndRef,
-
-    // Actions
     sendMessage,
     toggleProduct,
     retrySearch,
     startAnalysisGeneration,
     fetchReportData,
     reset,
-
-    // Convenience aliases kept for backward compat with generate/page.tsx
     productName: collected.deviceName || '',
     intendedUse: collected.intendedUse || '',
   }
 }
-
-

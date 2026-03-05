@@ -62,30 +62,19 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
         </button>
         
         <GenerateWorkflowContent
-          messageHistory={workflow.messageHistory}
-          currentStep={workflow.currentStep}
-          productName={workflow.productName}
-          setProductName={workflow.setProductName}
-          intendedUse={workflow.intendedUse}
-          setIntendedUse={workflow.setIntendedUse}
-          selectedProducts={workflow.selectedProducts}
-          similarProducts={workflow.similarProducts}
-          fdaResultsText={workflow.fdaResultsText}
-          aiResultsText={workflow.aiResultsText}
+          messages={workflow.messages}
+          latestSearchMsgId={workflow.latestSearchMsgId}
+          collected={workflow.collected}
+          isReadyToStart={workflow.isReadyToStart}
+          isLoading={workflow.isLoading}
+          phase={workflow.phase}
+          countdown={workflow.countdown}
           workflowEndRef={workflow.workflowEndRef}
-          handleDeviceNameSubmit={workflow.handleDeviceNameSubmit}
-          handleProductCodeSubmit={workflow.handleProductCodeSubmit}
-          handleProductCodeSkip={workflow.handleProductCodeSkip}
-          handleIntendedUseAnswer={workflow.handleIntendedUseAnswer}
-          handleIntendedUseSubmit={workflow.handleIntendedUseSubmit}
-          handleRetrySearch={workflow.handleRetrySearch}
-          handleNewSearch={workflow.handleNewSearch}
-          handleToggleProduct={workflow.handleToggleProduct}
-          handleGenerateReport={handleGenerateReport}
-          isSubmitting={isSubmitting}
+          sendMessage={workflow.sendMessage}
+          toggleProduct={workflow.toggleProduct}
+          retrySearch={workflow.retrySearch}
+          startAnalysisGeneration={handleGenerateReport}
           styles={styles}
-          searchType={workflow.searchType}
-          setSearchType={workflow.setSearchType}
         />
       </div>
     </div>

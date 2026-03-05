@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Message, SimilarProduct } from '@/lib/types'
-import { CollectedParams, SearchResultSet } from '@/lib/useGenerateWorkflow'
+import { CollectedParams } from '@/lib/useGenerateWorkflow'
 
 interface GenerateWorkflowContentProps {
   messages: Message[]
-  suggestedOptions: string[]
-  searchResults: SearchResultSet | null
+  /** ID of the most recently added search-result message */
+  latestSearchMsgId: string | null
+  /** Pre-fill the chat input on mount (e.g. from ?productName query param) */
+  initialInputText?: string
   collected: CollectedParams
   isReadyToStart: boolean
   isLoading: boolean
@@ -24,8 +26,8 @@ interface GenerateWorkflowContentProps {
 
 export default function GenerateWorkflowContent({
   messages,
-  suggestedOptions,
-  searchResults,
+  latestSearchMsgId,
+  initialInputText,
   collected,
   isReadyToStart,
   isLoading,
@@ -39,7 +41,7 @@ export default function GenerateWorkflowContent({
   styles,
   renderCompleted,
 }: GenerateWorkflowContentProps) {
-  const [inputText, setInputText] = useState('')
+  const [inputText, setInputText] = useState(initialInputText ?? '')
   const [retryInput, setRetryInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -54,10 +56,6 @@ export default function GenerateWorkflowContent({
     if (!text) return
     setInputText('')
     sendMessage(text)
-  }
-
-  const handleOptionClick = (option: string) => {
-    sendMessage(option)
   }
 
   const handleRetrySubmit = (e: React.FormEvent) => {
@@ -88,179 +86,123 @@ export default function GenerateWorkflowContent({
     return ({ 1: 'I', 2: 'II', 3: 'III' } as Record<number, string>)[num] ?? String(n)
   }
 
-  const fdaProducts = searchResults?.fdaResults ?? []
-  const aiProducts = searchResults?.aiResults ?? []
-  const hasSearchResults = fdaProducts.length > 0 || aiProducts.length > 0
-  const noResultsFound = searchResults !== null && !hasSearchResults
   const selectedIds = new Set(collected.selectedProducts.map(p => p.id))
 
-  return (
-    <div className={styles.workflow}>
-      {/* ── Message history ── */}
-      {messages.map((message) => (
-        <div key={message.id} className={styles.message}>
-          {message.type === 'ai' && (
-            <div className={styles.messageHeader}>
-              <div className={styles.aiAvatar}>
-                <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+  const renderInlineSearchResults = (message: Message) => {
+    const results = message.searchResultSet
+    if (!results) return null
+    const fdaProducts = results.fdaResults ?? []
+    const aiProducts = results.aiResults ?? []
+    const isLatest = message.id === latestSearchMsgId
+
+    return (
+      <div>
+        {/* FDA results */}
+        {fdaProducts.length > 0 && (
+          <>
+            {results.fdaResultsText && (
+              <div style={{ marginBottom: 10, fontSize: 14, color: '#666' }}>
+                {results.fdaResultsText}
               </div>
-            </div>
-          )}
-          <div className={`${styles.messageContent} ${message.type === 'user' ? styles.userMessage : ''}`}>
-            {renderMessageContent(message.content)}
-          </div>
-        </div>
-      ))}
-
-      {/* ── Suggested quick-reply options ── */}
-      {suggestedOptions.length > 0 && phase === 'chat' && !isLoading && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <div className={styles.buttonGroup}>
-              {suggestedOptions.map((opt, i) => (
-                <button
-                  key={i}
-                  className={styles.choiceButton}
-                  onClick={() => handleOptionClick(opt)}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Loading indicator ── */}
-      {isLoading && phase === 'chat' && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <div className={styles.loading}>⏳</div>
-          </div>
-        </div>
-      )}
-
-      {/* ── FDA Search results table ── */}
-      {hasSearchResults && phase === 'chat' && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            {/* FDA results */}
-            {fdaProducts.length > 0 && (
-              <>
-                {searchResults?.fdaResultsText && (
-                  <div style={{ marginBottom: 10, fontSize: 14, color: '#666' }}>
-                    {searchResults.fdaResultsText}
-                  </div>
-                )}
-                <div className={styles.tableContainer}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th className={styles.th}>SELECT</th>
-                        <th className={styles.th}>PRODUCT CODE</th>
-                        <th className={styles.th}>DEVICE</th>
-                        <th className={styles.th}>REGULATION DESCRIPTION</th>
-                        <th className={styles.th}>MEDICAL SPECIALTY</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fdaProducts.map((product) => (
-                        <tr key={product.id} className={styles.tr}>
-                          <td className={styles.td}>
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(product.id)}
-                              onChange={() => toggleProduct(product)}
-                              className={styles.checkbox}
-                            />
-                          </td>
-                          <td className={styles.td}>
-                            <div className={styles.productCodeCell}>
-                              <span className={styles.productCode}>{product.productCode}</span>
-                              {product.fdaClassificationLink && (
-                                <a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
-                                  View FDA Classification →
-                                </a>
-                              )}
-                            </div>
-                          </td>
-                          <td className={styles.td}>{product.device}</td>
-                          <td className={styles.td}>{product.regulationDescription}</td>
-                          <td className={styles.td}>{product.medicalSpecialty}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
             )}
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.th}>SELECT</th>
+                    <th className={styles.th}>PRODUCT CODE</th>
+                    <th className={styles.th}>DEVICE</th>
+                    <th className={styles.th}>REGULATION DESCRIPTION</th>
+                    <th className={styles.th}>MEDICAL SPECIALTY</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fdaProducts.map((product) => (
+                    <tr key={product.id} className={styles.tr}>
+                      <td className={styles.td}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(product.id)}
+                          onChange={() => isLatest && toggleProduct(product)}
+                          disabled={!isLatest}
+                          className={styles.checkbox}
+                        />
+                      </td>
+                      <td className={styles.td}>
+                        <div className={styles.productCodeCell}>
+                          <span className={styles.productCode}>{product.productCode}</span>
+                          {product.fdaClassificationLink && (
+                            <a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
+                              View FDA Classification →
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className={styles.td}>{product.device}</td>
+                      <td className={styles.td}>{product.regulationDescription}</td>
+                      <td className={styles.td}>{product.medicalSpecialty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-            {/* AI results */}
-            {aiProducts.length > 0 && (
-              <>
-                {searchResults?.aiResultsText && (
-                  <div style={{ marginTop: 20, marginBottom: 10, fontSize: 14, color: '#666' }}>
-                    {searchResults.aiResultsText}
-                  </div>
-                )}
-                <div className={styles.tableContainer}>
-                  <table className={styles.table}>
-                    <tbody>
-                      {aiProducts.map((product) => (
-                        <tr key={product.id} className={styles.tr}>
-                          <td className={styles.td} style={{ width: 80, verticalAlign: 'top', paddingTop: 20 }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(product.id)}
-                              onChange={() => toggleProduct(product)}
-                              className={styles.checkbox}
-                            />
-                          </td>
-                          <td className={styles.td}>
-                            <div style={{ lineHeight: 1.6 }}>
-                              <div>
-                                <strong>Product Code:</strong> {product.productCode}
-                                {product.fdaClassificationLink && (
-                                  <>&nbsp;&nbsp;&nbsp;<a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} style={{ fontSize: 12 }}>View FDA Classification</a></>
-                                )}
-                              </div>
-                              {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
-                              {product.regulationNumber && (
-                                <div>
-                                  <strong>Regulation Number:</strong>&nbsp;
-                                  <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
-                                    {product.regulationNumber}
-                                  </a>
-                                </div>
-                              )}
-                              {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
-                              {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+        {/* AI results */}
+        {aiProducts.length > 0 && (
+          <>
+            {results.aiResultsText && (
+              <div style={{ marginTop: 20, marginBottom: 10, fontSize: 14, color: '#666' }}>
+                {results.aiResultsText}
+              </div>
             )}
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <tbody>
+                  {aiProducts.map((product) => (
+                    <tr key={product.id} className={styles.tr}>
+                      <td className={styles.td} style={{ width: 80, verticalAlign: 'top', paddingTop: 20 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(product.id)}
+                          onChange={() => isLatest && toggleProduct(product)}
+                          disabled={!isLatest}
+                          className={styles.checkbox}
+                        />
+                      </td>
+                      <td className={styles.td}>
+                        <div style={{ lineHeight: 1.6 }}>
+                          <div>
+                            <strong>Product Code:</strong> {product.productCode}
+                            {product.fdaClassificationLink && (
+                              <>&nbsp;&nbsp;&nbsp;<a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} style={{ fontSize: 12 }}>View FDA Classification</a></>
+                            )}
+                          </div>
+                          {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
+                          {product.regulationNumber && (
+                            <div>
+                              <strong>Regulation Number:</strong>&nbsp;
+                              <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
+                                {product.regulationNumber}
+                              </a>
+                            </div>
+                          )}
+                          {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
+                          {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-            {/* Search again */}
+        {/* Search again + Generate Report — only on the latest search message */}
+        {isLatest && (
+          <>
             <form onSubmit={handleRetrySubmit} className={styles.searchAgainForm} style={{ marginTop: 16 }}>
               <input
                 type="text"
@@ -272,7 +214,6 @@ export default function GenerateWorkflowContent({
               <button type="submit" className={styles.searchAgainButton}>Search Again</button>
             </form>
 
-            {/* Generate button */}
             {isReadyToStart && (
               <button
                 className={styles.generateButton}
@@ -283,46 +224,83 @@ export default function GenerateWorkflowContent({
                 Generate Report
               </button>
             )}
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
+    )
+  }
 
-      {/* ── No results: retry form ── */}
-      {noResultsFound && phase === 'chat' && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <form onSubmit={handleRetrySubmit} className={styles.inlineForm}>
-              <input
-                type="text"
-                value={retryInput}
-                onChange={e => setRetryInput(e.target.value)}
-                className={styles.inlineInput}
-                placeholder="Enter a more general device name"
-                autoFocus
-              />
-              <button type="submit" className={styles.inlineButton}>Search Again</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Standalone Generate button (if ready but no search widget showing) ── */}
-      {isReadyToStart && !hasSearchResults && phase === 'chat' && collected.selectedProducts.length > 0 && (
-        <div className={styles.message}>
-          <div className={styles.messageHeader}>
-            <div className={styles.aiAvatar}>
-              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
-            </div>
-          </div>
-          <div className={styles.messageContent}>
-            <button className={styles.generateButton} onClick={startAnalysisGeneration}>
+  return (
+    <div className={styles.workflow}>
+      {/* ── Sticky floating action bar (visible when products are selected) ── */}
+      {collected.selectedProducts.length > 0 && phase === 'chat' && (
+        <div style={{
+          position: 'sticky',
+          top: 8,
+          zIndex: 20,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          pointerEvents: 'none',
+          marginBottom: 4,
+        }}>
+          <div style={{
+            pointerEvents: 'auto',
+            background: '#fff',
+            border: '1px solid #d1d5db',
+            borderRadius: 10,
+            padding: '8px 14px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}>
+            <span style={{ color: '#555' }}>
+              Checked:{' '}
+              <strong style={{ color: '#111' }}>
+                {collected.productCodes.join(', ')}
+              </strong>
+            </span>
+            <button
+              className={styles.generateButton}
+              onClick={startAnalysisGeneration}
+              disabled={isLoading}
+              style={{ width: 'auto', marginTop: 0 }}
+            >
               Generate Report
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Message history (search results are embedded inside matching messages) ── */}
+      {messages.map((message) => (
+        <div key={message.id} className={styles.message}>
+          {message.type === 'ai' && (
+            <div className={styles.messageHeader}>
+              <div className={styles.aiAvatar}>
+                <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+              </div>
+            </div>
+          )}
+          <div className={`${styles.messageContent} ${message.type === 'user' ? styles.userMessage : ''}`}>
+            {renderMessageContent(message.content)}
+            {message.searchResultSet && renderInlineSearchResults(message)}
+          </div>
+        </div>
+      ))}
+
+      {/* ── Loading indicator ── */}
+      {isLoading && phase === 'chat' && (
+        <div className={styles.message}>
+          <div className={styles.messageHeader}>
+            <div className={styles.aiAvatar}>
+              <img src="/favicon.ico" alt="CiraHealth AI" className={styles.aiAvatarImage} />
+            </div>
+          </div>
+          <div className={styles.messageContent}>
+            <div className={styles.loading}>⏳</div>
           </div>
         </div>
       )}
@@ -349,7 +327,7 @@ export default function GenerateWorkflowContent({
       {/* ── Completed phase ── */}
       {phase === 'completed' && renderCompleted && renderCompleted()}
 
-      {/* ── Chat input (only in chat phase, right-aligned like a user message) ── */}
+      {/* ── Chat input (only in chat phase) ── */}
       {phase === 'chat' && (
         <div className={`${styles.message} ${styles.chatInputMessage}`}>
           <div className={styles.messageContent}>
@@ -380,4 +358,3 @@ export default function GenerateWorkflowContent({
     </div>
   )
 }
-
