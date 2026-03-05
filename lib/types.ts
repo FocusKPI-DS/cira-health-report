@@ -99,7 +99,6 @@ export interface StartAnalysisAction {
   type: 'start_analysis'
   product_name: string
   product_codes: string[]
-  intended_use?: string
   message?: string
 }
 

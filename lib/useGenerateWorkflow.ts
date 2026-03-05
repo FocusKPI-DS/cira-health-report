@@ -236,23 +236,21 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         const collectedForAnalysis: CollectedParams = {
           deviceName: a.product_name,
           productCodes: a.product_codes,
-          intendedUse: a.intended_use ?? '',
+          intendedUse: '',
           selectedProducts: selectedProductsRef.current,
         }
 
         trackEvent('generate_report', {
           product_name: a.product_name,
-          intended_use: a.intended_use || undefined,
           selected_products_count: selectedProductsRef.current.length,
           product_codes: a.product_codes.join(','),
         })
 
-        // Update collected so productName / intendedUse aliases are correct
         setCollected(prev => ({
           ...prev,
           deviceName: a.product_name,
           productCodes: a.product_codes,
-          intendedUse: a.intended_use ?? '',
+          intendedUse: '',
         }))
 
         await startAnalysisGenerationWith(collectedForAnalysis)
