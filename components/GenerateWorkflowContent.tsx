@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Message, SimilarProduct } from '@/lib/types'
 import { CollectedParams } from '@/lib/useGenerateWorkflow'
+import { fetchMaudeCount } from '@/lib/fda-api'
 
 interface GenerateWorkflowContentProps {
   messages: Message[]
@@ -44,6 +45,31 @@ export default function GenerateWorkflowContent({
   const [inputText, setInputText] = useState(initialInputText ?? '')
   const [retryInput, setRetryInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // MAUDE counts keyed by product code, fetched asynchronously from openFDA
+  const [maudeCounts, setMaudeCounts] = useState<Record<string, number>>({})
+  const fetchedCodes = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const allCodes = new Set<string>()
+    for (const message of messages) {
+      const results = message.searchResultSet
+      if (!results) continue
+      for (const p of results.fdaResults ?? []) {
+        if (p.productCode) allCodes.add(p.productCode)
+      }
+      for (const p of results.aiResults ?? []) {
+        if (p.productCode) allCodes.add(p.productCode)
+      }
+    }
+    for (const code of allCodes) {
+      if (fetchedCodes.current.has(code)) continue
+      fetchedCodes.current.add(code)
+      fetchMaudeCount(code).then(count => {
+        setMaudeCounts(prev => ({ ...prev, [code]: count }))
+      })
+    }
+  }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus input on mount
   useEffect(() => {
@@ -138,7 +164,7 @@ export default function GenerateWorkflowContent({
                       </td>
                       <td className={styles.td}>
                         <div className={styles.productCodeCell}>
-                          <span className={styles.productCode}>{product.productCode}</span>
+                          <span className={styles.productCode}>{product.productCode}{product.productCode in maudeCounts ? ` (${maudeCounts[product.productCode].toLocaleString()})` : ' (...)'}</span>
                           {product.fdaClassificationLink && (
                             <a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
                               View FDA Classification →
@@ -182,7 +208,7 @@ export default function GenerateWorkflowContent({
                       <td className={styles.td}>
                         <div style={{ lineHeight: 1.6 }}>
                           <div>
-                            <strong>Product Code:</strong> {product.productCode}
+                            <strong>Product Code:</strong> {product.productCode}{product.productCode in maudeCounts ? ` (${maudeCounts[product.productCode].toLocaleString()})` : ' (...)'}
                             {product.fdaClassificationLink && (
                               <>&nbsp;&nbsp;&nbsp;<a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} style={{ fontSize: 12 }}>View FDA Classification</a></>
                             )}

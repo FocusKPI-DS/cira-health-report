@@ -23,6 +23,13 @@ interface FDAApiResponse {
 }
 
 /**
+ * Returns the api_key query string fragment for openFDA requests, or empty string if not configured.
+ */
+function getFdaKeyParam(): string {
+  return process.env.FDA_API_KEY ? `&api_key=${encodeURIComponent(process.env.FDA_API_KEY)}` : ''
+}
+
+/**
  * Use OpenAI to get potential FDA product codes for a device name
  */
 async function getProductCodesFromOpenAI(deviceName: string): Promise<{ productCodes: string[], rawResponse: string }> {
@@ -68,16 +75,13 @@ async function getProductCodesFromOpenAI(deviceName: string): Promise<{ productC
  */
 async function searchFDAByProductCode(productCode: string): Promise<FDAClassificationResult[]> {
   try {
-    const fdaApiUrl = `https://api.fda.gov/device/classification.json?search=product_code:${productCode}&limit=10`
-    
+    const fdaApiUrl = `https://api.fda.gov/device/classification.json?search=product_code:${productCode}&limit=10${getFdaKeyParam()}`
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
 
     const response = await fetch(fdaApiUrl, {
       signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-      },
     })
 
     clearTimeout(timeoutId)
@@ -118,7 +122,7 @@ export async function GET(request: NextRequest) {
     // Build the openFDA API URL
     // Search in device_name field using case-insensitive search
     const encodedDeviceName = encodeURIComponent(deviceName.trim())
-    const fdaApiUrl = `https://api.fda.gov/device/classification.json?search=device_name:"${encodedDeviceName}"&limit=${limit}`
+    const fdaApiUrl = `https://api.fda.gov/device/classification.json?search=device_name:"${encodedDeviceName}"&limit=${limit}${getFdaKeyParam()}`
 
     console.log('[FDA Search] Searching for:', deviceName, '| URL:', fdaApiUrl)
 
@@ -129,9 +133,6 @@ export async function GET(request: NextRequest) {
     try {
       const response = await fetch(fdaApiUrl, {
         signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-        },
       })
 
       clearTimeout(timeoutId)
