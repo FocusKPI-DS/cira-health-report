@@ -62,7 +62,7 @@ export default function GenerateWorkflowContent({
         if (p.productCode) allCodes.add(p.productCode)
       }
     }
-    for (const code of allCodes) {
+    for (const code of Array.from(allCodes)) {
       if (fetchedCodes.current.has(code)) continue
       fetchedCodes.current.add(code)
       fetchMaudeCount(code).then(count => {
