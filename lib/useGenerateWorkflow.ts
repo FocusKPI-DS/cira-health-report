@@ -4,7 +4,7 @@ import {
   Message, SimilarProduct, Hazard, SearchResultSet,
   AgentAction, AgentHistoryMessage, AgentResponse,
   ShowProductsAction, StartAnalysisAction, ModuleQuestionAction, HazardSummaryAction,
-  DbSearchSelection,
+  ToolCallAction, DbSearchSelection,
 } from './types'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 import { trackEvent } from './analytics'
@@ -83,6 +83,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const hazardCategoriesRef = useRef<string[]>([])
   // ── Ready to generate after hazard summary confirmed ──
   const [isReadyToGenerate, setIsReadyToGenerate] = useState(false)
+  const [pendingModeSelection, setPendingModeSelection] = useState(false)
+  const [analysisMode, setAnalysisMode] = useState<'simple' | 'detailed' | null>(null)
   // ── Analysis runtime state ──
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -142,7 +144,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   }, [])
 
   // ─── startAnalysisGenerationWith — unchanged execution logic ─────────────────
-  const startAnalysisGenerationWith = useCallback(async (data: CollectedParams, hazards?: string[]) => {
+  const startAnalysisGenerationWith = useCallback(async (data: CollectedParams, hazards?: string[], mode?: string, availableHazards?: string[]) => {
     if (data.productCodes.length === 0) return
 
     const similarProductsForBackend = data.selectedProducts.map(product => ({
@@ -171,6 +173,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           data.dbSearchValues,
           data.dbSearchKeyword,
           hazards,
+          mode,
+          availableHazards,
         )
         onStartSuccess(startResult.analysis_id, data.deviceName || '', data.intendedUse || '')
       } catch (error) {
@@ -207,6 +211,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         data.dbSearchValues,
         data.dbSearchKeyword,
         hazards,
+        mode,
+        availableHazards,
       )
       if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
@@ -226,6 +232,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   // selectedProductsRef lets handleAction read the latest selected products without
   // adding them as a useCallback dependency (would cause a re-render loop).
   const selectedProductsRef = useRef<SimilarProduct[]>([])
+  // Stores search results fetched client-side when handling tool_call
+  const pendingSearchResultsRef = useRef<import('./types').DbResults | null>(null)
 
   const handleAction = useCallback(async (action: AgentAction) => {
     switch (action.type) {
@@ -236,6 +244,36 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         break
       }
 
+      case 'tool_call': {
+        const a = action as ToolCallAction
+        const query = a.params?.query || a.params?.keyword || ''
+        let dbResults = null
+        try {
+          const headers = await getAuthHeaders()
+          const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(query)}&limit=20`
+          const res = await fetch(url, { headers })
+          if (res.ok) dbResults = await res.json()
+        } catch (e) {
+          console.error('[tool_call] Search failed', e)
+        }
+        pendingSearchResultsRef.current = dbResults?.db_results ?? dbResults
+        // Send tool_result back to agent (condensed summary for LLM context)
+        const dbTotal = dbResults?.db_results?.total ?? dbResults?.total ?? 0
+        const toolResult: AgentHistoryMessage = {
+          role: 'tool_result',
+          tool: a.tool,
+          data: { total: dbTotal, keyword: query },
+        }
+        const newHistory: AgentHistoryMessage[] = [
+          ...agentHistoryRef.current,
+          { role: 'assistant', action },
+          toolResult,
+        ]
+        pushHistory(newHistory)
+        if (callAgentRef.current) await callAgentRef.current(newHistory)
+        break
+      }
+
       case 'show_products': {
         const a = action as ShowProductsAction
         const resultSet: SearchResultSet = {
@@ -243,8 +281,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           aiResults: a.ai_results ?? [],
           fdaResultsText: a.fda_results_text ?? '',
           aiResultsText: a.ai_results_text ?? '',
-          dbResults: a.db_results,
+          // prefer client-side fetched results; fall back to whatever agent returned
+          dbResults: pendingSearchResultsRef.current ?? a.db_results,
         }
+        pendingSearchResultsRef.current = null
         // Reset db selection on new search
         setDbSearchSelection(null)
         dbSearchSelectionRef.current = null
@@ -288,7 +328,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           ? a.hazard_categories
           : hazardCategoriesRef.current
 
-        await startAnalysisGenerationWith(collectedForAnalysis, hazardsForAnalysis)
+        await startAnalysisGenerationWith(collectedForAnalysis, hazardsForAnalysis, 'detailed', hazardsForAnalysis)
         break
       }
 
@@ -429,28 +469,62 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       return
     }
 
+    // Show mode selection question
+    appendMessage('ai', 'Would you like a **Simple Analysis** (start immediately) or **More Questions** (answer ISO 24971 questions for more targeted hazard analysis)?')
+    setSuggestedOptions([])
+    setPendingModeSelection(true)
+  }, [appendMessage])
+
+  const selectAnalysisMode = useCallback(async (mode: 'simple' | 'detailed') => {
+    if (isLoading) return
+    setAnalysisMode(mode)
+    setPendingModeSelection(false)
+    appendMessage('user', mode === 'simple' ? 'Simple Analysis' : 'More Questions')
+
+    const selected = selectedProductsRef.current
+    const dbSel = dbSearchSelectionRef.current
     const codes = selected.map(p => p.productCode).filter(Boolean) as string[]
     const deviceName = collected.deviceName ?? (selected[0]?.device || selected[0]?.deviceName || '')
 
     setSuggestedOptions([])
 
-    // Both DB and FDA/AI paths now go through the agent for ISO 24971 questioning
-    const toolResult: AgentHistoryMessage = {
-      role: 'tool_result',
-      tool: 'user_selected_products',
-      data: {
-        product_codes: codes.length > 0 ? codes : [],
-        device_name: deviceName,
-        count: selected.length,
-        // DB path info — agent doesn't need this, but start_analysis handler reads dbSearchSelectionRef
-        ...(dbSel ? { db_search_type: dbSel.type } : {}),
-      },
+    if (mode === 'simple') {
+      // Simple mode: skip agent questions, go directly to analysis
+      const collectedForAnalysis: CollectedParams = {
+        deviceName,
+        productCodes: codes.length > 0 ? codes : (dbSel ? ['_db_'] : []),
+        intendedUse: '',
+        selectedProducts: selected,
+        ...(dbSel ? {
+          dbSearchType: dbSel.type,
+          dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
+          dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+        } : {}),
+      }
+      setCollected(prev => ({
+        ...prev,
+        deviceName: deviceName || prev.deviceName,
+        productCodes: collectedForAnalysis.productCodes,
+        intendedUse: '',
+      }))
+      await startAnalysisGenerationWith(collectedForAnalysis, undefined, 'simple', undefined)
+    } else {
+      // Detailed mode: go through agent for ISO 24971 questions
+      const toolResult: AgentHistoryMessage = {
+        role: 'tool_result',
+        tool: 'user_selected_products',
+        data: {
+          product_codes: codes.length > 0 ? codes : [],
+          device_name: deviceName,
+          count: selected.length,
+          ...(dbSel ? { db_search_type: dbSel.type } : {}),
+        },
+      }
+      const newHistory: AgentHistoryMessage[] = [...agentHistoryRef.current, toolResult]
+      pushHistory(newHistory)
+      await callAgent(newHistory)
     }
-
-    const newHistory: AgentHistoryMessage[] = [...agentHistoryRef.current, toolResult]
-    pushHistory(newHistory)
-    await callAgent(newHistory)
-  }, [collected.deviceName, collected.intendedUse, pushHistory, callAgent, startAnalysisGenerationWith])
+  }, [isLoading, collected.deviceName, appendMessage, startAnalysisGenerationWith, pushHistory, callAgent])
 
   // ─── Public: toggle product checkbox ────────────────────────────────────────
   const toggleProduct = useCallback((product: SimilarProduct) => {
@@ -536,7 +610,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
       } : {}),
     }
-    await startAnalysisGenerationWith(params, hazardCategoriesRef.current)
+    await startAnalysisGenerationWith(params, hazardCategoriesRef.current, 'detailed', hazardCategoriesRef.current)
   }, [isLoading, collected, startAnalysisGenerationWith])
 
   // ─── Public: answer a module question (Phase 2) ──────────────────────────────
@@ -579,6 +653,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setHazardCategories([])
     hazardCategoriesRef.current = []
     setIsReadyToGenerate(false)
+    setPendingModeSelection(false)
+    setAnalysisMode(null)
     pushHistory([])
     selectedProductsRef.current = []
   }, [pushHistory])
@@ -600,10 +676,13 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     dbSearchSelection,
     retrySearch,
     startAnalysisGeneration,
+    selectAnalysisMode,
     answerModuleQuestion,
     confirmAndGenerate,
     hazardCategories,
     isReadyToGenerate,
+    pendingModeSelection,
+    analysisMode,
     fetchReportData,
     reset,
     productName: collected.deviceName || '',

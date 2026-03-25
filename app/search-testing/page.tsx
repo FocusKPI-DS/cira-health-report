@@ -138,7 +138,7 @@ export default function SearchTestingPage() {
                       <td style={tdStyle}>{r.productCode}</td>
                       <td style={tdStyle}>{r.deviceName}</td>
                       <td style={tdStyle}>{r.deviceClass}</td>
-                      <td style={tdStyle} style={{ maxWidth: 300, whiteSpace: 'normal' }}>{r.reason}</td>
+                      <td style={{ ...tdStyle, maxWidth: 300, whiteSpace: 'normal' }}>{r.reason}</td>
                     </tr>
                   ))}
                 </tbody>

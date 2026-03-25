@@ -152,6 +152,12 @@ export interface ErrorAction {
   recoverable: boolean
 }
 
+export interface ToolCallAction {
+  type: 'tool_call'
+  tool: string
+  params: Record<string, string>
+}
+
 export type AgentAction =
   | AskAction
   | MessageAction
@@ -160,6 +166,7 @@ export type AgentAction =
   | ModuleQuestionAction
   | HazardSummaryAction
   | ErrorAction
+  | ToolCallAction
 
 export interface AgentHistoryMessage {
   role: 'user' | 'assistant' | 'tool_result'

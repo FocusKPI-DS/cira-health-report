@@ -88,6 +88,8 @@ function GenerateContent() {
           answerModuleQuestion={workflow.answerModuleQuestion}
           confirmAndGenerate={workflow.confirmAndGenerate}
           isReadyToGenerate={workflow.isReadyToGenerate}
+          pendingModeSelection={workflow.pendingModeSelection}
+          selectAnalysisMode={workflow.selectAnalysisMode}
           styles={styles}
           renderCompleted={renderCompleted}
         />

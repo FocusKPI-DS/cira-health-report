@@ -27,6 +27,8 @@ interface GenerateWorkflowContentProps {
   answerModuleQuestion?: (module: number, questionIndex: number, answer: string) => void
   confirmAndGenerate?: () => void
   isReadyToGenerate?: boolean
+  pendingModeSelection?: boolean
+  selectAnalysisMode?: (mode: 'simple' | 'detailed') => void
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
 }
@@ -50,6 +52,8 @@ export default function GenerateWorkflowContent({
   answerModuleQuestion,
   confirmAndGenerate,
   isReadyToGenerate,
+  pendingModeSelection,
+  selectAnalysisMode,
   styles,
   renderCompleted,
 }: GenerateWorkflowContentProps) {
@@ -556,6 +560,48 @@ export default function GenerateWorkflowContent({
           </div>
         </div>
       ))}
+
+      {/* ── Mode selection buttons ── */}
+      {pendingModeSelection && selectAnalysisMode && phase === 'chat' && (
+        <div className={styles.message}>
+          <div className={styles.messageContent}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+              <button
+                onClick={() => selectAnalysisMode('simple')}
+                disabled={isLoading}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  border: '2px solid #3b82f6',
+                  background: '#eff6ff',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#1d4ed8',
+                }}
+              >
+                Simple Analysis
+              </button>
+              <button
+                onClick={() => selectAnalysisMode('detailed')}
+                disabled={isLoading}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  border: '2px solid #8b5cf6',
+                  background: '#f5f3ff',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#6d28d9',
+                }}
+              >
+                More Questions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Loading indicator ── */}
       {isLoading && phase === 'chat' && (

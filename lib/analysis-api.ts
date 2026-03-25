@@ -114,6 +114,8 @@ export const analysisApi = {
     dbSearchValues?: string[],
     dbSearchKeyword?: string,
     hazardCategories?: string[],
+    analysisMode?: string,
+    availableHazards?: string[],
   ): Promise<StartAnalysisResponse> {
     const headers = await getAuthHeaders()
 
@@ -126,6 +128,8 @@ export const analysisApi = {
       ...(dbSearchValues?.length && { db_search_values: dbSearchValues }),
       ...(dbSearchKeyword && { db_search_keyword: dbSearchKeyword }),
       ...(hazardCategories?.length && { hazard_categories: hazardCategories }),
+      ...(analysisMode && { analysis_mode: analysisMode }),
+      ...(availableHazards?.length && { available_hazards: availableHazards }),
     }
 
     console.log('[Start Analysis] API URL:', API_URL)
@@ -252,9 +256,11 @@ export const analysisApi = {
     dbSearchValues?: string[],
     dbSearchKeyword?: string,
     hazardCategories?: string[],
+    analysisMode?: string,
+    availableHazards?: string[],
   ): Promise<AnalysisStatusResponse & { analysisId: string }> {
     // Start the analysis
-    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse, dbSearchType, dbSearchValues, dbSearchKeyword, hazardCategories)
+    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse, dbSearchType, dbSearchValues, dbSearchKeyword, hazardCategories, analysisMode, availableHazards)
     const analysisId = startResponse.analysis_id
 
     // Poll for status
