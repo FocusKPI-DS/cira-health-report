@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Message, SimilarProduct } from '@/lib/types'
+import { Message, SimilarProduct, DbSearchSelection, DbResults } from '@/lib/types'
 import { CollectedParams } from '@/lib/useGenerateWorkflow'
 import { fetchMaudeCount } from '@/lib/fda-api'
+import { getAuthHeaders } from '@/lib/api-utils'
 
 interface GenerateWorkflowContentProps {
   messages: Message[]
@@ -19,8 +20,13 @@ interface GenerateWorkflowContentProps {
   workflowEndRef: React.RefObject<HTMLDivElement | null>
   sendMessage: (text: string) => void
   toggleProduct: (product: SimilarProduct) => void
+  toggleDbItem: (type: DbSearchSelection['type'], value: string, keyword: string) => void
+  dbSearchSelection: DbSearchSelection | null
   retrySearch: (newName: string) => void
   startAnalysisGeneration: () => void
+  answerModuleQuestion?: (module: number, questionIndex: number, answer: string) => void
+  confirmAndGenerate?: () => void
+  isReadyToGenerate?: boolean
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
 }
@@ -37,8 +43,13 @@ export default function GenerateWorkflowContent({
   workflowEndRef,
   sendMessage,
   toggleProduct,
+  toggleDbItem,
+  dbSearchSelection,
   retrySearch,
   startAnalysisGeneration,
+  answerModuleQuestion,
+  confirmAndGenerate,
+  isReadyToGenerate,
   styles,
   renderCompleted,
 }: GenerateWorkflowContentProps) {
@@ -46,7 +57,7 @@ export default function GenerateWorkflowContent({
   const [retryInput, setRetryInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // MAUDE counts keyed by product code, fetched asynchronously from openFDA
+  // MAUDE counts keyed by product code, fetched asynchronously from our DB
   const [maudeCounts, setMaudeCounts] = useState<Record<string, number>>({})
   const fetchedCodes = useRef<Set<string>>(new Set())
 
@@ -65,11 +76,44 @@ export default function GenerateWorkflowContent({
     for (const code of Array.from(allCodes)) {
       if (fetchedCodes.current.has(code)) continue
       fetchedCodes.current.add(code)
-      fetchMaudeCount(code).then(count => {
-        setMaudeCounts(prev => ({ ...prev, [code]: count }))
-      })
+      getAuthHeaders().then(headers =>
+        fetchMaudeCount(code, headers as Record<string, string>).then(count => {
+          setMaudeCounts(prev => ({ ...prev, [code]: count }))
+        })
+      )
     }
   }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Date range state for DB search filtering (default: 10 years ago → today)
+  const today = new Date()
+  const tenYearsAgo = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate())
+  const toDateStr = (d: Date) => d.toISOString().slice(0, 10)
+  const defaultStartDate = toDateStr(tenYearsAgo)
+  const defaultEndDate = toDateStr(today)
+
+  const [dbStartDate, setDbStartDate] = useState(defaultStartDate)
+  const [dbEndDate, setDbEndDate] = useState(defaultEndDate)
+  // Per-message override of dbResults (after date re-query)
+  const [dbResultsOverride, setDbResultsOverride] = useState<Record<string, DbResults>>({})
+  const [dbDateLoading, setDbDateLoading] = useState(false)
+
+  const handleApplyDates = async (messageId: string, keyword: string) => {
+    setDbDateLoading(true)
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const headers = await getAuthHeaders()
+      const url = `${API_URL}/api/v1/anonclient/db-search?keyword=${encodeURIComponent(keyword)}&start_date=${dbStartDate}&end_date=${dbEndDate}`
+      const res = await fetch(url, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        setDbResultsOverride(prev => ({ ...prev, [messageId]: data }))
+      }
+    } catch (e) {
+      console.error('[DB Search] Date re-query failed', e)
+    } finally {
+      setDbDateLoading(false)
+    }
+  }
 
   // Focus input on mount
   useEffect(() => {
@@ -234,6 +278,136 @@ export default function GenerateWorkflowContent({
           </>
         )}
 
+        {/* DB results */}
+        {results.dbResults && (() => {
+          const db = dbResultsOverride[message.id] ?? results.dbResults!
+          const sel = dbSearchSelection
+
+          const isAllChecked = sel?.type === 'keyword'
+          const isBrandChecked = (v: string) => sel?.type === 'brand_name' && sel.values.includes(v)
+          const isGenericChecked = (v: string) => sel?.type === 'generic_name' && sel.values.includes(v)
+          const isCodeChecked = (v: string) => sel?.type === 'product_code' && sel.values.includes(v)
+
+          return (
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontSize: 14, color: '#666', marginBottom: 10 }}>
+                Our database contains <strong>{db.total.toLocaleString()}</strong> MAUDE events matching &quot;{db.keyword}&quot;. Select a grouping below to use as analysis source.
+              </div>
+
+              {/* Date range filter */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: '#555' }}>Date range:</span>
+                <input
+                  type="date"
+                  value={dbStartDate}
+                  onChange={e => setDbStartDate(e.target.value)}
+                  style={{ fontSize: 13, padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 4 }}
+                />
+                <span style={{ fontSize: 13, color: '#555' }}>to</span>
+                <input
+                  type="date"
+                  value={dbEndDate}
+                  onChange={e => setDbEndDate(e.target.value)}
+                  style={{ fontSize: 13, padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 4 }}
+                />
+                <button
+                  onClick={() => handleApplyDates(message.id, db.keyword)}
+                  disabled={dbDateLoading}
+                  style={{ fontSize: 13, padding: '3px 10px', border: '1px solid #d1d5db', borderRadius: 4, background: '#f9fafb', cursor: dbDateLoading ? 'wait' : 'pointer' }}
+                >
+                  {dbDateLoading ? 'Loading…' : 'Apply'}
+                </button>
+              </div>
+
+              {/* All */}
+              <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isLatest ? 'pointer' : 'default', fontWeight: 600, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllChecked}
+                    onChange={() => isLatest && toggleDbItem('keyword', db.keyword, db.keyword)}
+                    disabled={!isLatest}
+                    className={styles.checkbox}
+                  />
+                  All ({db.total.toLocaleString()} records)
+                </label>
+              </div>
+
+              {/* By Brand */}
+              {db.by_brand.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                    The following {db.by_brand.length} result{db.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
+                  </div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                    {db.by_brand.map(item => (
+                      <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                        <input
+                          type="checkbox"
+                          checked={isBrandChecked(item.value)}
+                          onChange={() => isLatest && toggleDbItem('brand_name', item.value, db.keyword)}
+                          disabled={!isLatest}
+                          className={styles.checkbox}
+                        />
+                        <span style={{ flex: 1 }}>{item.value}</span>
+                        <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* By Generic Name */}
+              {db.by_generic.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                    The following {db.by_generic.length} result{db.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
+                  </div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                    {db.by_generic.map(item => (
+                      <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                        <input
+                          type="checkbox"
+                          checked={isGenericChecked(item.value)}
+                          onChange={() => isLatest && toggleDbItem('generic_name', item.value, db.keyword)}
+                          disabled={!isLatest}
+                          className={styles.checkbox}
+                        />
+                        <span style={{ flex: 1 }}>{item.value}</span>
+                        <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* By Product Code */}
+              {db.by_product_code.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                    The following {db.by_product_code.length} result{db.by_product_code.length !== 1 ? 's are' : ' is'} classified by product code
+                  </div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                    {db.by_product_code.map(item => (
+                      <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                        <input
+                          type="checkbox"
+                          checked={isCodeChecked(item.value)}
+                          onChange={() => isLatest && toggleDbItem('product_code', item.value, db.keyword)}
+                          disabled={!isLatest}
+                          className={styles.checkbox}
+                        />
+                        <span style={{ flex: 1 }}>{item.value}</span>
+                        <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Search again + Generate Report — only on the latest search message */}
         {isLatest && (
           <>
@@ -248,14 +422,14 @@ export default function GenerateWorkflowContent({
               <button type="submit" className={styles.searchAgainButton}>Search Again</button>
             </form>
 
-            {isReadyToStart && (
+            {(isReadyToStart || dbSearchSelection !== null) && (
               <button
                 className={styles.generateButton}
                 onClick={startAnalysisGeneration}
-                disabled={collected.selectedProducts.length === 0}
+                disabled={collected.selectedProducts.length === 0 && dbSearchSelection === null}
                 style={{ marginTop: 16 }}
               >
-                Generate Report
+                Continue →
               </button>
             )}
           </>
@@ -266,47 +440,59 @@ export default function GenerateWorkflowContent({
 
   return (
     <div className={styles.workflow}>
-      {/* ── Sticky floating action bar (visible when products are selected) ── */}
-      {collected.selectedProducts.length > 0 && phase === 'chat' && (
-        <div style={{
-          position: 'sticky',
-          top: 8,
-          zIndex: 20,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          pointerEvents: 'none',
-          marginBottom: 4,
-        }}>
+      {/* ── Sticky floating action bar ── */}
+      {(collected.selectedProducts.length > 0 || dbSearchSelection !== null) && phase === 'chat' && (() => {
+        const dbSel = dbSearchSelection
+        let label = ''
+        if (dbSel) {
+          if (dbSel.type === 'keyword') {
+            label = `All MAUDE events for "${dbSel.keyword}"`
+          } else {
+            const typeLabel = dbSel.type === 'brand_name' ? 'Brand' : dbSel.type === 'generic_name' ? 'Generic' : 'Product Code'
+            label = `${typeLabel}: ${dbSel.values.join(', ')}`
+          }
+        } else {
+          label = `FDA codes: ${collected.productCodes.join(', ')}`
+        }
+        return (
           <div style={{
-            pointerEvents: 'auto',
-            background: '#fff',
-            border: '1px solid #d1d5db',
-            borderRadius: 10,
-            padding: '8px 14px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            position: 'sticky',
+            top: 8,
+            zIndex: 20,
             display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            fontSize: 13,
-            lineHeight: 1.4,
+            justifyContent: 'flex-end',
+            pointerEvents: 'none',
+            marginBottom: 4,
           }}>
-            <span style={{ color: '#555' }}>
-              Checked:{' '}
-              <strong style={{ color: '#111' }}>
-                {collected.productCodes.join(', ')}
-              </strong>
-            </span>
-            <button
-              className={styles.generateButton}
-              onClick={startAnalysisGeneration}
-              disabled={isLoading}
-              style={{ width: 'auto', marginTop: 0 }}
-            >
-              Generate Report
-            </button>
+            <div style={{
+              pointerEvents: 'auto',
+              background: '#fff',
+              border: '1px solid #d1d5db',
+              borderRadius: 10,
+              padding: '8px 14px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              fontSize: 13,
+              lineHeight: 1.4,
+            }}>
+              <span style={{ color: '#555' }}>
+                Selected:{' '}
+                <strong style={{ color: '#111' }}>{label}</strong>
+              </span>
+              <button
+                className={styles.generateButton}
+                onClick={startAnalysisGeneration}
+                disabled={isLoading}
+                style={{ width: 'auto', marginTop: 0 }}
+              >
+                Continue →
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Message history (search results are embedded inside matching messages) ── */}
       {messages.map((message) => (
@@ -321,6 +507,52 @@ export default function GenerateWorkflowContent({
           <div className={`${styles.messageContent} ${message.type === 'user' ? styles.userMessage : ''}`}>
             {renderMessageContent(message.content)}
             {message.searchResultSet && renderInlineSearchResults(message)}
+            {message.moduleQuestion && answerModuleQuestion && (
+              <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {message.moduleQuestion.options.map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => answerModuleQuestion(
+                      message.moduleQuestion!.module,
+                      message.moduleQuestion!.question_index,
+                      option
+                    )}
+                    disabled={isLoading}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 6,
+                      border: '1px solid #d1d5db',
+                      background: '#f9fafb',
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: '#374151',
+                    }}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
+            {message.hazardSummary && (
+              <div style={{ marginTop: 12 }}>
+                <ul style={{ paddingLeft: 20, margin: '0 0 16px' }}>
+                  {message.hazardSummary.hazard_categories.map((cat) => (
+                    <li key={cat} style={{ fontSize: 13, color: '#374151', marginBottom: 4 }}>{cat}</li>
+                  ))}
+                </ul>
+                {isReadyToGenerate && confirmAndGenerate && (
+                  <button
+                    className={styles.generateButton}
+                    onClick={confirmAndGenerate}
+                    disabled={isLoading}
+                    style={{ width: 'auto', marginTop: 0 }}
+                  >
+                    Generate Report
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}

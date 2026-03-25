@@ -105,14 +105,27 @@ export const analysisApi = {
    * @param productName The user-entered product/device name
    * @param intendedUse Optional intended use description
    */
-  async startAnalysis(productCodes: string[], similarProducts: any[] = [], productName: string = '', intendedUse?: string): Promise<StartAnalysisResponse> {
+  async startAnalysis(
+    productCodes: string[],
+    similarProducts: any[] = [],
+    productName: string = '',
+    intendedUse?: string,
+    dbSearchType?: string,
+    dbSearchValues?: string[],
+    dbSearchKeyword?: string,
+    hazardCategories?: string[],
+  ): Promise<StartAnalysisResponse> {
     const headers = await getAuthHeaders()
 
-    const requestBody = {
+    const requestBody: Record<string, any> = {
       product_codes: productCodes,
       similar_products: similarProducts,
       product_name: productName,
-      intended_use_snapshot: intendedUse || null
+      intended_use_snapshot: intendedUse || null,
+      ...(dbSearchType && { db_search_type: dbSearchType }),
+      ...(dbSearchValues?.length && { db_search_values: dbSearchValues }),
+      ...(dbSearchKeyword && { db_search_keyword: dbSearchKeyword }),
+      ...(hazardCategories?.length && { hazard_categories: hazardCategories }),
     }
 
     console.log('[Start Analysis] API URL:', API_URL)
@@ -234,10 +247,14 @@ export const analysisApi = {
     productName: string = '',
     intendedUse?: string,
     onStatusUpdate?: (status: AnalysisStatusResponse) => void,
-    pollInterval: number = 5000
+    pollInterval: number = 5000,
+    dbSearchType?: string,
+    dbSearchValues?: string[],
+    dbSearchKeyword?: string,
+    hazardCategories?: string[],
   ): Promise<AnalysisStatusResponse & { analysisId: string }> {
     // Start the analysis
-    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse)
+    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse, dbSearchType, dbSearchValues, dbSearchKeyword, hazardCategories)
     const analysisId = startResponse.analysis_id
 
     // Poll for status

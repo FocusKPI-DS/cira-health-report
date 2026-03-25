@@ -3,7 +3,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 import {
   Message, SimilarProduct, Hazard, SearchResultSet,
   AgentAction, AgentHistoryMessage, AgentResponse,
-  ShowProductsAction, StartAnalysisAction,
+  ShowProductsAction, StartAnalysisAction, ModuleQuestionAction, HazardSummaryAction,
+  DbSearchSelection,
 } from './types'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 import { trackEvent } from './analytics'
@@ -33,6 +34,9 @@ export interface CollectedParams {
   /** null = not yet asked; '' = explicitly skipped */
   intendedUse: string | null
   selectedProducts: SimilarProduct[]
+  dbSearchType?: string
+  dbSearchValues?: string[]
+  dbSearchKeyword?: string
 }
 
 // ─── Options ──────────────────────────────────────────────────────────────────
@@ -67,10 +71,18 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   })
   // ── Latest search results ID — used to detect the newest search message ──
   const [latestSearchMsgId, setLatestSearchMsgId] = useState<string | null>(null)
+  // ── DB search selection (from db_results panel) ──
+  const [dbSearchSelection, setDbSearchSelection] = useState<DbSearchSelection | null>(null)
+  const dbSearchSelectionRef = useRef<DbSearchSelection | null>(null)
   // ── Whether all required params are ready ──
   const [isReadyToStart, setIsReadyToStart] = useState(false)
   // ── Loading flag while waiting for AI reply or search ──
   const [isLoading, setIsLoading] = useState(false)
+  // ── ISO 24971 hazard categories collected during module questioning ──
+  const [hazardCategories, setHazardCategories] = useState<string[]>([])
+  const hazardCategoriesRef = useRef<string[]>([])
+  // ── Ready to generate after hazard summary confirmed ──
+  const [isReadyToGenerate, setIsReadyToGenerate] = useState(false)
   // ── Analysis runtime state ──
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -130,7 +142,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   }, [])
 
   // ─── startAnalysisGenerationWith — unchanged execution logic ─────────────────
-  const startAnalysisGenerationWith = useCallback(async (data: CollectedParams) => {
+  const startAnalysisGenerationWith = useCallback(async (data: CollectedParams, hazards?: string[]) => {
     if (data.productCodes.length === 0) return
 
     const similarProductsForBackend = data.selectedProducts.map(product => ({
@@ -155,6 +167,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           similarProductsForBackend,
           data.deviceName || '',
           data.intendedUse || undefined,
+          data.dbSearchType,
+          data.dbSearchValues,
+          data.dbSearchKeyword,
+          hazards,
         )
         onStartSuccess(startResult.analysis_id, data.deviceName || '', data.intendedUse || '')
       } catch (error) {
@@ -187,6 +203,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           console.log('[Analysis] Status:', status.status, status.detail)
         },
         5000,
+        data.dbSearchType,
+        data.dbSearchValues,
+        data.dbSearchKeyword,
+        hazards,
       )
       if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
@@ -223,7 +243,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           aiResults: a.ai_results ?? [],
           fdaResultsText: a.fda_results_text ?? '',
           aiResultsText: a.ai_results_text ?? '',
+          dbResults: a.db_results,
         }
+        // Reset db selection on new search
+        setDbSearchSelection(null)
+        dbSearchSelectionRef.current = null
         appendMessage('ai', a.message, resultSet)
         setSuggestedOptions([])
         break
@@ -234,11 +258,17 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         if (a.message) appendMessage('ai', a.message)
         setSuggestedOptions([])
 
+        const dbSel = dbSearchSelectionRef.current
         const collectedForAnalysis: CollectedParams = {
           deviceName: a.product_name,
-          productCodes: a.product_codes,
+          productCodes: a.product_codes.length > 0 ? a.product_codes : (dbSel ? ['_db_'] : []),
           intendedUse: '',
           selectedProducts: selectedProductsRef.current,
+          ...(dbSel ? {
+            dbSearchType: dbSel.type,
+            dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
+            dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+          } : {}),
         }
 
         trackEvent('generate_report', {
@@ -250,11 +280,50 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setCollected(prev => ({
           ...prev,
           deviceName: a.product_name,
-          productCodes: a.product_codes,
+          productCodes: collectedForAnalysis.productCodes,
           intendedUse: '',
         }))
 
-        await startAnalysisGenerationWith(collectedForAnalysis)
+        const hazardsForAnalysis = a.hazard_categories && a.hazard_categories.length > 0
+          ? a.hazard_categories
+          : hazardCategoriesRef.current
+
+        await startAnalysisGenerationWith(collectedForAnalysis, hazardsForAnalysis)
+        break
+      }
+
+      case 'module_question': {
+        const a = action as ModuleQuestionAction
+        // Append AI message with embedded module question for button rendering
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        setMessages(prev => [...prev, {
+          id,
+          type: 'ai',
+          content: a.message,
+          timestamp: Date.now(),
+          moduleQuestion: a,
+        }])
+        setSuggestedOptions([])
+        break
+      }
+
+      case 'hazard_summary': {
+        const a = action as HazardSummaryAction
+        // Store categories
+        hazardCategoriesRef.current = a.hazard_categories
+        setHazardCategories(a.hazard_categories)
+        // Append AI message with embedded hazard summary
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        setMessages(prev => [...prev, {
+          id,
+          type: 'ai',
+          content: a.message,
+          timestamp: Date.now(),
+          hazardSummary: a,
+        }])
+        setSuggestedOptions([])
+        // Wait for user to click "Generate Report"
+        setIsReadyToGenerate(true)
         break
       }
 
@@ -263,8 +332,18 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         setSuggestedOptions([])
         break
       }
+
+      default: {
+        console.error('[Agent] Unknown action type:', (action as AgentAction & { type: string }).type, action)
+        appendMessage('ai', 'Sorry, something went wrong. Please try again.')
+        setSuggestedOptions([])
+        break
+      }
     }
-  }, [appendMessage, startAnalysisGenerationWith])
+  }, [appendMessage, startAnalysisGenerationWith, pushHistory])
+
+  // Ref to break circular dependency between handleAction and callAgent
+  const callAgentRef = useRef<((history: AgentHistoryMessage[]) => Promise<void>) | null>(null)
 
   // ─── Core agent call ─────────────────────────────────────────────────────────
   const callAgent = useCallback(async (history: AgentHistoryMessage[]) => {
@@ -312,6 +391,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     }
   }, [appendMessage, handleAction, pushHistory])
 
+  // Keep ref in sync
+  useEffect(() => { callAgentRef.current = callAgent }, [callAgent])
+
   // ─── Public: user sends a text message ───────────────────────────────────────
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return
@@ -340,8 +422,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   // intended_use and then return start_analysis.
   const startAnalysisGeneration = useCallback(async () => {
     const selected = selectedProductsRef.current
-    if (selected.length === 0) {
-      alert('Please select at least one product from the search results.')
+    const dbSel = dbSearchSelectionRef.current
+
+    if (selected.length === 0 && !dbSel) {
+      alert('Please select at least one product or a MAUDE database group.')
       return
     }
 
@@ -350,20 +434,23 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
     setSuggestedOptions([])
 
+    // Both DB and FDA/AI paths now go through the agent for ISO 24971 questioning
     const toolResult: AgentHistoryMessage = {
       role: 'tool_result',
       tool: 'user_selected_products',
       data: {
-        product_codes: codes,
+        product_codes: codes.length > 0 ? codes : [],
         device_name: deviceName,
         count: selected.length,
+        // DB path info — agent doesn't need this, but start_analysis handler reads dbSearchSelectionRef
+        ...(dbSel ? { db_search_type: dbSel.type } : {}),
       },
     }
 
     const newHistory: AgentHistoryMessage[] = [...agentHistoryRef.current, toolResult]
     pushHistory(newHistory)
     await callAgent(newHistory)
-  }, [collected.deviceName, pushHistory, callAgent])
+  }, [collected.deviceName, collected.intendedUse, pushHistory, callAgent, startAnalysisGenerationWith])
 
   // ─── Public: toggle product checkbox ────────────────────────────────────────
   const toggleProduct = useCallback((product: SimilarProduct) => {
@@ -387,12 +474,84 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     })
   }, [])
 
+  // ─── Public: toggle DB result item (mutual exclusion across groups) ─────────
+  const toggleDbItem = useCallback((
+    type: DbSearchSelection['type'],
+    value: string,      // ignored when type === 'keyword'
+    keyword: string,    // the full-text keyword (from dbResults.keyword)
+  ) => {
+    setDbSearchSelection((prev: DbSearchSelection | null) => {
+      let next: DbSearchSelection | null
+
+      if (type === 'keyword') {
+        // All — toggle off if already selected, else select
+        next = prev?.type === 'keyword' ? null : { type: 'keyword', values: [], keyword }
+      } else if (prev?.type === type) {
+        // Same group: multi-select within group
+        const already = prev.values.includes(value)
+        const newValues = already ? prev.values.filter((v: string) => v !== value) : [...prev.values, value]
+        next = newValues.length > 0 ? { type, values: newValues, keyword: '' } : null
+      } else {
+        // Different group: clear previous, start fresh
+        next = { type, values: [value], keyword: '' }
+      }
+
+      dbSearchSelectionRef.current = next
+      // isReadyToStart: true when db OR fda/ai items are selected
+      setIsReadyToStart(
+        next !== null || selectedProductsRef.current.length > 0
+      )
+      return next
+    })
+  }, [])
+
   // ─── Public: retry search (just send as new user message) ───────────────────
   const retrySearch = useCallback(async (newDeviceName: string) => {
     const trimmed = newDeviceName.trim()
     if (!trimmed) return
     await sendMessage(trimmed)
   }, [sendMessage])
+
+  // ─── Public: user clicks "Generate Report" after hazard summary ─────────────
+  const confirmAndGenerate = useCallback(async () => {
+    if (isLoading) return
+    setIsReadyToGenerate(false)
+    const collectedSnap = {
+      deviceName: collected.deviceName,
+      productCodes: collected.productCodes,
+      intendedUse: collected.intendedUse || '',
+      selectedProducts: selectedProductsRef.current,
+      dbSearchType: collected.dbSearchType,
+      dbSearchValues: collected.dbSearchValues,
+      dbSearchKeyword: collected.dbSearchKeyword,
+    }
+    // Use productCodes from collected; if DB path, fall back to _db_ placeholder
+    const dbSel = dbSearchSelectionRef.current
+    const params: CollectedParams = {
+      ...collectedSnap,
+      productCodes: collectedSnap.productCodes.length > 0 ? collectedSnap.productCodes : (dbSel ? ['_db_'] : []),
+      ...(dbSel ? {
+        dbSearchType: dbSel.type,
+        dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
+        dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+      } : {}),
+    }
+    await startAnalysisGenerationWith(params, hazardCategoriesRef.current)
+  }, [isLoading, collected, startAnalysisGenerationWith])
+
+  // ─── Public: answer a module question (Phase 2) ──────────────────────────────
+  const answerModuleQuestion = useCallback(async (module: number, questionIndex: number, answer: string) => {
+    if (isLoading) return
+    appendMessage('user', answer)
+    const toolResult: AgentHistoryMessage = {
+      role: 'tool_result',
+      tool: 'module_answer',
+      data: { module, question_index: questionIndex, answer },
+    }
+    const newHistory: AgentHistoryMessage[] = [...agentHistoryRef.current, toolResult]
+    pushHistory(newHistory)
+    await callAgent(newHistory)
+  }, [isLoading, appendMessage, pushHistory, callAgent])
 
   // ─── Fetch report data after completion ─────────────────────────────────────
   const fetchReportData = useCallback(async (): Promise<Hazard[]> => {
@@ -417,6 +576,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setAnalysisId(null)
     setCountdown(null)
     setPhase('chat')
+    setHazardCategories([])
+    hazardCategoriesRef.current = []
+    setIsReadyToGenerate(false)
     pushHistory([])
     selectedProductsRef.current = []
   }, [pushHistory])
@@ -434,8 +596,14 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     workflowEndRef,
     sendMessage,
     toggleProduct,
+    toggleDbItem,
+    dbSearchSelection,
     retrySearch,
     startAnalysisGeneration,
+    answerModuleQuestion,
+    confirmAndGenerate,
+    hazardCategories,
+    isReadyToGenerate,
     fetchReportData,
     reset,
     productName: collected.deviceName || '',

@@ -81,8 +81,13 @@ function GenerateContent() {
           workflowEndRef={workflow.workflowEndRef}
           sendMessage={workflow.sendMessage}
           toggleProduct={workflow.toggleProduct}
+          toggleDbItem={workflow.toggleDbItem}
+          dbSearchSelection={workflow.dbSearchSelection}
           retrySearch={workflow.retrySearch}
           startAnalysisGeneration={workflow.startAnalysisGeneration}
+          answerModuleQuestion={workflow.answerModuleQuestion}
+          confirmAndGenerate={workflow.confirmAndGenerate}
+          isReadyToGenerate={workflow.isReadyToGenerate}
           styles={styles}
           renderCompleted={renderCompleted}
         />

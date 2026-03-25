@@ -1,10 +1,33 @@
 // Shared types for generate workflow
 
+export type DbSearchType = 'product_code' | 'brand_name' | 'generic_name' | 'keyword'
+
+export interface DbResultGroup {
+  value: string
+  count: number
+}
+
+export interface DbResults {
+  total: number
+  keyword: string
+  by_brand: DbResultGroup[]
+  by_generic: DbResultGroup[]
+  by_product_code: DbResultGroup[]
+}
+
+/** Tracks what the user has selected in the DB results panel */
+export interface DbSearchSelection {
+  type: DbSearchType
+  values: string[]      // for product_code / brand_name / generic_name
+  keyword: string       // for keyword (All)
+}
+
 export interface SearchResultSet {
   fdaResults: SimilarProduct[]
   aiResults: SimilarProduct[]
   fdaResultsText: string
   aiResultsText: string
+  dbResults?: DbResults
 }
 
 export interface SimilarProduct {
@@ -66,6 +89,10 @@ export interface Message {
   timestamp: number
   /** Embedded search results to render inline with this message */
   searchResultSet?: SearchResultSet
+  /** ISO 24971 module question options to render as buttons */
+  moduleQuestion?: ModuleQuestionAction
+  /** ISO 24971 hazard summary to render inline */
+  hazardSummary?: HazardSummaryAction
 }
 
 // ─── Agent types ──────────────────────────────────────────────────────────────
@@ -93,13 +120,30 @@ export interface ShowProductsAction {
   ai_results: SimilarProduct[]
   fda_results_text: string
   ai_results_text: string
+  db_results?: DbResults
 }
 
 export interface StartAnalysisAction {
   type: 'start_analysis'
   product_name: string
   product_codes: string[]
+  hazard_categories?: string[]
   message?: string
+}
+
+export interface ModuleQuestionAction {
+  type: 'module_question'
+  module: number
+  module_name: string
+  question_index: number
+  message: string
+  options: string[]
+}
+
+export interface HazardSummaryAction {
+  type: 'hazard_summary'
+  message: string
+  hazard_categories: string[]
 }
 
 export interface ErrorAction {
@@ -113,6 +157,8 @@ export type AgentAction =
   | MessageAction
   | ShowProductsAction
   | StartAnalysisAction
+  | ModuleQuestionAction
+  | HazardSummaryAction
   | ErrorAction
 
 export interface AgentHistoryMessage {

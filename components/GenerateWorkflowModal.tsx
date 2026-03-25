@@ -72,8 +72,13 @@ export default function GenerateWorkflowModal({ isOpen, onClose, onComplete, onS
           workflowEndRef={workflow.workflowEndRef}
           sendMessage={workflow.sendMessage}
           toggleProduct={workflow.toggleProduct}
+          toggleDbItem={workflow.toggleDbItem}
+          dbSearchSelection={workflow.dbSearchSelection}
           retrySearch={workflow.retrySearch}
           startAnalysisGeneration={handleGenerateReport}
+          answerModuleQuestion={workflow.answerModuleQuestion}
+          confirmAndGenerate={workflow.confirmAndGenerate}
+          isReadyToGenerate={workflow.isReadyToGenerate}
           styles={styles}
         />
       </div>
