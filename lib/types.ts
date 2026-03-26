@@ -60,6 +60,7 @@ export interface PotentialHarmItem {
   potential_harm: string
   harm_rowspan: number
   potential_harm_list: SeverityItem[]
+  llm_processed?: boolean
 }
 
 export interface Hazard {
@@ -93,6 +94,8 @@ export interface Message {
   moduleQuestion?: ModuleQuestionAction
   /** ISO 24971 hazard summary to render inline */
   hazardSummary?: HazardSummaryAction
+  /** ISO 24971 checklist form — rendered as interactive form panel */
+  isoChecklist?: boolean
 }
 
 // ─── Agent types ──────────────────────────────────────────────────────────────

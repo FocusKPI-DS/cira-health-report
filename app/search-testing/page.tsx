@@ -19,6 +19,11 @@ interface SearchResult {
 export default function SearchTestingPage() {
   const [query, setQuery] = useState('')
   const [searchType, setSearchType] = useState<'keywords' | 'product-code'>('keywords')
+  const today = new Date()
+  const tenYearsAgo = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate())
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  const [startDate, setStartDate] = useState(fmt(tenYearsAgo))
+  const [endDate, setEndDate] = useState(fmt(today))
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<SearchResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +43,8 @@ export default function SearchTestingPage() {
       const params = new URLSearchParams({ search_type: searchType, limit: '20' })
       if (searchType === 'keywords') params.set('deviceName', q)
       else params.set('productCode', q)
+      if (startDate) params.set('start_date', startDate)
+      if (endDate) params.set('end_date', endDate)
 
       const resp = await fetch(`${API_URL}/api/v1/anonclient/search-fda-products?${params}`, { headers })
       const data = await resp.json()
@@ -74,6 +81,10 @@ export default function SearchTestingPage() {
           style={{ flex: 1, minWidth: 220, padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
           autoFocus
         />
+        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+          style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }} />
+        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+          style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }} />
         <button
           type="submit"
           disabled={loading}

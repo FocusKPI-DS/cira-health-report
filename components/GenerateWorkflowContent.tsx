@@ -5,6 +5,7 @@ import { Message, SimilarProduct, DbSearchSelection, DbResults } from '@/lib/typ
 import { CollectedParams } from '@/lib/useGenerateWorkflow'
 import { fetchMaudeCount } from '@/lib/fda-api'
 import { getAuthHeaders } from '@/lib/api-utils'
+import IsoChecklistPanel from '@/components/IsoChecklistPanel'
 
 interface GenerateWorkflowContentProps {
   messages: Message[]
@@ -29,6 +30,11 @@ interface GenerateWorkflowContentProps {
   isReadyToGenerate?: boolean
   pendingModeSelection?: boolean
   selectAnalysisMode?: (mode: 'simple' | 'detailed') => void
+  submitIsoChecklist?: (answers: Record<string, string>) => void
+  searchStartDate?: string
+  searchEndDate?: string
+  setSearchStartDate?: (d: string) => void
+  setSearchEndDate?: (d: string) => void
   styles: Record<string, string>
   renderCompleted?: () => React.ReactNode
 }
@@ -54,6 +60,11 @@ export default function GenerateWorkflowContent({
   isReadyToGenerate,
   pendingModeSelection,
   selectAnalysisMode,
+  submitIsoChecklist,
+  searchStartDate: searchStartDateProp,
+  searchEndDate: searchEndDateProp,
+  setSearchStartDate,
+  setSearchEndDate,
   styles,
   renderCompleted,
 }: GenerateWorkflowContentProps) {
@@ -88,15 +99,11 @@ export default function GenerateWorkflowContent({
     }
   }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Date range state for DB search filtering (default: 10 years ago → today)
-  const today = new Date()
-  const tenYearsAgo = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate())
   const toDateStr = (d: Date) => d.toISOString().slice(0, 10)
-  const defaultStartDate = toDateStr(tenYearsAgo)
-  const defaultEndDate = toDateStr(today)
-
-  const [dbStartDate, setDbStartDate] = useState(defaultStartDate)
-  const [dbEndDate, setDbEndDate] = useState(defaultEndDate)
+  const dbStartDate = searchStartDateProp ?? '2010-01-01'
+  const dbEndDate = searchEndDateProp ?? toDateStr(new Date())
+  const setDbStartDate = setSearchStartDate ?? (() => {})
+  const setDbEndDate = setSearchEndDate ?? (() => {})
   // Per-message override of dbResults (after date re-query)
   const [dbResultsOverride, setDbResultsOverride] = useState<Record<string, DbResults>>({})
   const [dbDateLoading, setDbDateLoading] = useState(false)
@@ -106,11 +113,11 @@ export default function GenerateWorkflowContent({
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       const headers = await getAuthHeaders()
-      const url = `${API_URL}/api/v1/anonclient/db-search?keyword=${encodeURIComponent(keyword)}&start_date=${dbStartDate}&end_date=${dbEndDate}`
+      const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(keyword)}&limit=20&start_date=${dbStartDate}&end_date=${dbEndDate}`
       const res = await fetch(url, { headers })
       if (res.ok) {
         const data = await res.json()
-        setDbResultsOverride(prev => ({ ...prev, [messageId]: data }))
+        setDbResultsOverride(prev => ({ ...prev, [messageId]: data.db_results ?? data }))
       }
     } catch (e) {
       console.error('[DB Search] Date re-query failed', e)
@@ -485,14 +492,6 @@ export default function GenerateWorkflowContent({
                 Selected:{' '}
                 <strong style={{ color: '#111' }}>{label}</strong>
               </span>
-              <button
-                className={styles.generateButton}
-                onClick={startAnalysisGeneration}
-                disabled={isLoading}
-                style={{ width: 'auto', marginTop: 0 }}
-              >
-                Continue →
-              </button>
             </div>
           </div>
         )
@@ -557,6 +556,14 @@ export default function GenerateWorkflowContent({
                 )}
               </div>
             )}
+            {message.isoChecklist && submitIsoChecklist && (
+              <IsoChecklistPanel
+                onSubmit={submitIsoChecklist}
+                isLoading={isLoading}
+                disabled={phase !== 'chat'}
+                styles={styles}
+              />
+            )}
           </div>
         </div>
       ))}
@@ -569,32 +576,16 @@ export default function GenerateWorkflowContent({
               <button
                 onClick={() => selectAnalysisMode('simple')}
                 disabled={isLoading}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: 8,
-                  border: '2px solid #3b82f6',
-                  background: '#eff6ff',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#1d4ed8',
-                }}
+                className={styles.generateButton}
+                style={{ width: 'auto', marginTop: 0 }}
               >
                 Simple Analysis
               </button>
               <button
                 onClick={() => selectAnalysisMode('detailed')}
                 disabled={isLoading}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: 8,
-                  border: '2px solid #8b5cf6',
-                  background: '#f5f3ff',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#6d28d9',
-                }}
+                className={styles.generateButton}
+                style={{ width: 'auto', marginTop: 0 }}
               >
                 More Questions
               </button>

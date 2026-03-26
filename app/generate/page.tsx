@@ -87,9 +87,14 @@ function GenerateContent() {
           startAnalysisGeneration={workflow.startAnalysisGeneration}
           answerModuleQuestion={workflow.answerModuleQuestion}
           confirmAndGenerate={workflow.confirmAndGenerate}
+          submitIsoChecklist={workflow.submitIsoChecklist}
           isReadyToGenerate={workflow.isReadyToGenerate}
           pendingModeSelection={workflow.pendingModeSelection}
           selectAnalysisMode={workflow.selectAnalysisMode}
+          searchStartDate={workflow.searchStartDate}
+          searchEndDate={workflow.searchEndDate}
+          setSearchStartDate={workflow.setSearchStartDate}
+          setSearchEndDate={workflow.setSearchEndDate}
           styles={styles}
           renderCompleted={renderCompleted}
         />

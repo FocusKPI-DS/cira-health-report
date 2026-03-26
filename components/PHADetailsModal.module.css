@@ -311,3 +311,15 @@
   }
 }
 
+
+.llmBadge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 7px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fff;
+  background: #7c3aed;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}

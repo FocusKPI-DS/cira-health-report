@@ -116,9 +116,12 @@ export const analysisApi = {
     hazardCategories?: string[],
     analysisMode?: string,
     availableHazards?: string[],
+    startDate?: string,
+    endDate?: string,
   ): Promise<StartAnalysisResponse> {
     const headers = await getAuthHeaders()
 
+    const today = new Date().toISOString().slice(0, 10)
     const requestBody: Record<string, any> = {
       product_codes: productCodes,
       similar_products: similarProducts,
@@ -130,6 +133,13 @@ export const analysisApi = {
       ...(hazardCategories?.length && { hazard_categories: hazardCategories }),
       ...(analysisMode && { analysis_mode: analysisMode }),
       ...(availableHazards?.length && { available_hazards: availableHazards }),
+      filters: {
+        dateRange: {
+          enabled: true,
+          startDate: startDate || '2010-01-01',
+          endDate: endDate || today,
+        },
+      },
     }
 
     console.log('[Start Analysis] API URL:', API_URL)
@@ -258,9 +268,11 @@ export const analysisApi = {
     hazardCategories?: string[],
     analysisMode?: string,
     availableHazards?: string[],
+    startDate?: string,
+    endDate?: string,
   ): Promise<AnalysisStatusResponse & { analysisId: string }> {
     // Start the analysis
-    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse, dbSearchType, dbSearchValues, dbSearchKeyword, hazardCategories, analysisMode, availableHazards)
+    const startResponse = await this.startAnalysis(productCodes, similarProducts, productName, intendedUse, dbSearchType, dbSearchValues, dbSearchKeyword, hazardCategories, analysisMode, availableHazards, startDate, endDate)
     const analysisId = startResponse.analysis_id
 
     // Poll for status

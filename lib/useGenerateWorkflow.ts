@@ -6,6 +6,7 @@ import {
   ShowProductsAction, StartAnalysisAction, ModuleQuestionAction, HazardSummaryAction,
   ToolCallAction, DbSearchSelection,
 } from './types'
+import { computeHazardCategories } from './iso-checklist'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
 import { trackEvent } from './analytics'
 import { getAuthHeaders } from './api-utils'
@@ -59,6 +60,14 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const { initialProductName = '', onComplete, onStartSuccess } = options
 
   // ── Chat messages displayed in the UI ──
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const [searchStartDate, setSearchStartDate] = useState('2010-01-01')
+  const [searchEndDate, setSearchEndDate] = useState(todayStr)
+  const searchStartDateRef = useRef('2010-01-01')
+  const searchEndDateRef = useRef(todayStr)
+  const setSearchStartDateAndRef = (d: string) => { searchStartDateRef.current = d; setSearchStartDate(d) }
+  const setSearchEndDateAndRef = (d: string) => { searchEndDateRef.current = d; setSearchEndDate(d) }
+
   const [messages, setMessages] = useState<Message[]>([])
   // ── Quick-reply buttons after the last AI message ──
   const [suggestedOptions, setSuggestedOptions] = useState<string[]>([])
@@ -175,6 +184,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           hazards,
           mode,
           availableHazards,
+          searchStartDateRef.current,
+          searchEndDateRef.current,
         )
         onStartSuccess(startResult.analysis_id, data.deviceName || '', data.intendedUse || '')
       } catch (error) {
@@ -213,6 +224,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         hazards,
         mode,
         availableHazards,
+        searchStartDateRef.current,
+        searchEndDateRef.current,
       )
       if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null }
       setCountdown(null)
@@ -250,7 +263,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         let dbResults = null
         try {
           const headers = await getAuthHeaders()
-          const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(query)}&limit=20`
+          const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(query)}&limit=20&start_date=2010-01-01`
           const res = await fetch(url, { headers })
           if (res.ok) dbResults = await res.json()
         } catch (e) {
@@ -488,41 +501,39 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
     setSuggestedOptions([])
 
+    const collectedForMode: CollectedParams = {
+      deviceName,
+      productCodes: codes.length > 0 ? codes : (dbSel ? ['_db_'] : []),
+      intendedUse: '',
+      selectedProducts: selected,
+      ...(dbSel ? {
+        dbSearchType: dbSel.type,
+        dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
+        dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+      } : {}),
+    }
+    setCollected(prev => ({
+      ...prev,
+      deviceName: deviceName || prev.deviceName,
+      productCodes: collectedForMode.productCodes,
+      intendedUse: '',
+      dbSearchType: collectedForMode.dbSearchType,
+      dbSearchValues: collectedForMode.dbSearchValues,
+      dbSearchKeyword: collectedForMode.dbSearchKeyword,
+    }))
+
     if (mode === 'simple') {
-      // Simple mode: skip agent questions, go directly to analysis
-      const collectedForAnalysis: CollectedParams = {
-        deviceName,
-        productCodes: codes.length > 0 ? codes : (dbSel ? ['_db_'] : []),
-        intendedUse: '',
-        selectedProducts: selected,
-        ...(dbSel ? {
-          dbSearchType: dbSel.type,
-          dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
-          dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
-        } : {}),
-      }
-      setCollected(prev => ({
-        ...prev,
-        deviceName: deviceName || prev.deviceName,
-        productCodes: collectedForAnalysis.productCodes,
-        intendedUse: '',
-      }))
-      await startAnalysisGenerationWith(collectedForAnalysis, undefined, 'simple', undefined)
+      await startAnalysisGenerationWith(collectedForMode, undefined, 'simple', undefined)
     } else {
-      // Detailed mode: go through agent for ISO 24971 questions
-      const toolResult: AgentHistoryMessage = {
-        role: 'tool_result',
-        tool: 'user_selected_products',
-        data: {
-          product_codes: codes.length > 0 ? codes : [],
-          device_name: deviceName,
-          count: selected.length,
-          ...(dbSel ? { db_search_type: dbSel.type } : {}),
-        },
-      }
-      const newHistory: AgentHistoryMessage[] = [...agentHistoryRef.current, toolResult]
-      pushHistory(newHistory)
-      await callAgent(newHistory)
+      // Detailed mode: show ISO 24971 checklist form directly (no agent roundtrip)
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+      setMessages(prev => [...prev, {
+        id,
+        type: 'ai',
+        content: 'Please answer the following ISO 24971 questions to identify applicable hazard categories for your device. Select the best answer for each question, then click **Generate Report**.',
+        timestamp: Date.now(),
+        isoChecklist: true,
+      }])
     }
   }, [isLoading, collected.deviceName, appendMessage, startAnalysisGenerationWith, pushHistory, callAgent])
 
@@ -635,6 +646,25 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     return response.results
   }, [analysisId])
 
+  // ─── Public: submit ISO 24971 checklist answers ──────────────────────────────
+  const submitIsoChecklist = useCallback(async (answers: Record<string, string>) => {
+    if (isLoading) return
+    const hazards = computeHazardCategories(answers)
+    const dbSel = dbSearchSelectionRef.current
+    const params: CollectedParams = {
+      deviceName: collected.deviceName,
+      productCodes: collected.productCodes.length > 0 ? collected.productCodes : (dbSel ? ['_db_'] : []),
+      intendedUse: collected.intendedUse || '',
+      selectedProducts: selectedProductsRef.current,
+      ...(dbSel ? {
+        dbSearchType: dbSel.type,
+        dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
+        dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+      } : {}),
+    }
+    await startAnalysisGenerationWith(params, hazards, 'detailed', hazards)
+  }, [isLoading, collected, startAnalysisGenerationWith])
+
   // ─── Reset everything ────────────────────────────────────────────────────────
   const reset = useCallback(() => {
     setMessages([{
@@ -679,6 +709,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     selectAnalysisMode,
     answerModuleQuestion,
     confirmAndGenerate,
+    submitIsoChecklist,
     hazardCategories,
     isReadyToGenerate,
     pendingModeSelection,
@@ -687,5 +718,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     reset,
     productName: collected.deviceName || '',
     intendedUse: collected.intendedUse || '',
+    searchStartDate,
+    searchEndDate,
+    setSearchStartDate: setSearchStartDateAndRef,
+    setSearchEndDate: setSearchEndDateAndRef,
   }
 }
