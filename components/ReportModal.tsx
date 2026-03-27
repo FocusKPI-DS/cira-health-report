@@ -147,9 +147,6 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
                           {isFirstHarmRow && (
                             <td className={styles.td} rowSpan={harmItem.harm_rowspan}>
                               {harmItem.potential_harm}
-                              {harmItem.llm_processed && (
-                                <span className={styles.llmBadge} title="AI classified">AI</span>
-                              )}
                             </td>
                           )}
                           <td className={styles.td}>

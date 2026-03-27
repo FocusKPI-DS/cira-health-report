@@ -122,9 +122,6 @@ export default function PHADetailsModal({ isOpen, onClose, analysisId, hazard, p
             <div className={styles.situationsList}>
               {currentSituations.map((situation) => (
                 <div key={situation.id} className={styles.situationCard}>
-                  {situation.llm_processed && (
-                    <span className={styles.llmBadge} title="AI classified">AI</span>
-                  )}
                   <div className={styles.situationField}>
                     <label className={styles.situationLabel}>Hazardous Situation</label>
                     <div className={styles.valueText}>{situation.hazardous_situation}</div>
