@@ -158,6 +158,8 @@ export interface ShowIsoChecklistAction {
   message: string
   /** key: "${module}-${questionIndex}", value: selected option string */
   pre_filled_answers: Record<string, string>
+  /** The intended use text provided by the user — stored as intended_use_snapshot on submit */
+  intended_use?: string
 }
 
 export interface ErrorAction {

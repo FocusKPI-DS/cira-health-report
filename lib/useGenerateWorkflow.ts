@@ -383,6 +383,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
       case 'show_iso_checklist': {
         const a = action as ShowIsoChecklistAction
+        // Store intended use so it's included as intended_use_snapshot on submit
+        if (a.intended_use && collectedForModeRef.current) {
+          collectedForModeRef.current.intendedUse = a.intended_use
+        }
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
         setMessages(prev => [...prev, {
           id,
