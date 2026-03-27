@@ -4,7 +4,7 @@ import {
   Message, SimilarProduct, Hazard, SearchResultSet,
   AgentAction, AgentHistoryMessage, AgentResponse,
   ShowProductsAction, StartAnalysisAction, ModuleQuestionAction, HazardSummaryAction,
-  ToolCallAction, DbSearchSelection,
+  ShowIsoChecklistAction, ToolCallAction, DbSearchSelection,
 } from './types'
 import { computeHazardCategories } from './iso-checklist'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
@@ -94,6 +94,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const [isReadyToGenerate, setIsReadyToGenerate] = useState(false)
   const [pendingModeSelection, setPendingModeSelection] = useState(false)
   const [analysisMode, setAnalysisMode] = useState<'simple' | 'detailed' | null>(null)
+  const [collectedForModeRef] = useState<{ current: CollectedParams | null }>({ current: null })
   // ── Analysis runtime state ──
   const [analysisId, setAnalysisId] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -380,6 +381,21 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         break
       }
 
+      case 'show_iso_checklist': {
+        const a = action as ShowIsoChecklistAction
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        setMessages(prev => [...prev, {
+          id,
+          type: 'ai',
+          content: a.message,
+          timestamp: Date.now(),
+          isoChecklist: true,
+          isoChecklistDefaults: a.pre_filled_answers,
+        }])
+        setSuggestedOptions([])
+        break
+      }
+
       case 'error': {
         appendMessage('ai', action.message)
         setSuggestedOptions([])
@@ -488,11 +504,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setPendingModeSelection(true)
   }, [appendMessage])
 
-  const selectAnalysisMode = useCallback(async (mode: 'simple' | 'detailed') => {
+  const selectAnalysisMode = useCallback(async (mode: 'simple' | 'detailed' | 'intended-use') => {
     if (isLoading) return
-    setAnalysisMode(mode)
+    setAnalysisMode(mode === 'intended-use' ? 'detailed' : mode)
     setPendingModeSelection(false)
-    appendMessage('user', mode === 'simple' ? 'Simple Analysis' : 'More Questions')
+    appendMessage('user', mode === 'simple' ? 'Simple Analysis' : mode === 'detailed' ? 'More Questions' : 'Input Intended Use')
 
     const selected = selectedProductsRef.current
     const dbSel = dbSearchSelectionRef.current
@@ -524,6 +540,15 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
     if (mode === 'simple') {
       await startAnalysisGenerationWith(collectedForMode, undefined, 'simple', undefined)
+    } else if (mode === 'intended-use') {
+      // Save params for later; route through agent to collect intended use
+      collectedForModeRef.current = collectedForMode
+      const newHistory: AgentHistoryMessage[] = [
+        ...agentHistoryRef.current,
+        { role: 'user', content: 'Input Intended Use' },
+      ]
+      pushHistory(newHistory)
+      await callAgent(newHistory)
     } else {
       // Detailed mode: show ISO 24971 checklist form directly (no agent roundtrip)
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -535,7 +560,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         isoChecklist: true,
       }])
     }
-  }, [isLoading, collected.deviceName, appendMessage, startAnalysisGenerationWith, pushHistory, callAgent])
+  }, [isLoading, collected.deviceName, appendMessage, startAnalysisGenerationWith, pushHistory, callAgent, collectedForModeRef])
 
   // ─── Public: toggle product checkbox ────────────────────────────────────────
   const toggleProduct = useCallback((product: SimilarProduct) => {
@@ -665,6 +690,32 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     await startAnalysisGenerationWith(params, hazards, 'detailed', hazards)
   }, [isLoading, collected, startAnalysisGenerationWith])
 
+  // ─── Public: submit intended use + selected hazards ──────────────────────────
+  const submitIntendedUseHazards = useCallback(async (intendedUse: string, selectedHazards: string[]) => {
+    if (isLoading) return
+    const params: CollectedParams = collectedForModeRef.current ?? {
+      deviceName: collected.deviceName,
+      productCodes: collected.productCodes,
+      intendedUse,
+      selectedProducts: selectedProductsRef.current,
+    }
+    params.intendedUse = intendedUse
+    await startAnalysisGenerationWith(params, selectedHazards, 'intended', selectedHazards)
+  }, [isLoading, collected, collectedForModeRef, startAnalysisGenerationWith])
+
+  // ─── Public: submit ISO checklist answers from intended-use flow ─────────────
+  const submitIntendedIsoChecklist = useCallback(async (answers: Record<string, string>) => {
+    if (isLoading) return
+    const hazards = computeHazardCategories(answers)
+    const params: CollectedParams = collectedForModeRef.current ?? {
+      deviceName: collected.deviceName,
+      productCodes: collected.productCodes,
+      intendedUse: '',
+      selectedProducts: selectedProductsRef.current,
+    }
+    await startAnalysisGenerationWith(params, hazards, 'intended', hazards)
+  }, [isLoading, collected, collectedForModeRef, startAnalysisGenerationWith])
+
   // ─── Reset everything ────────────────────────────────────────────────────────
   const reset = useCallback(() => {
     setMessages([{
@@ -710,6 +761,8 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     answerModuleQuestion,
     confirmAndGenerate,
     submitIsoChecklist,
+    submitIntendedIsoChecklist,
+    submitIntendedUseHazards,
     hazardCategories,
     isReadyToGenerate,
     pendingModeSelection,

@@ -6,6 +6,7 @@ import { CollectedParams } from '@/lib/useGenerateWorkflow'
 import { fetchMaudeCount } from '@/lib/fda-api'
 import { getAuthHeaders } from '@/lib/api-utils'
 import IsoChecklistPanel from '@/components/IsoChecklistPanel'
+import IntendedUseHazardPanel from '@/components/IntendedUseHazardPanel'
 
 interface GenerateWorkflowContentProps {
   messages: Message[]
@@ -29,8 +30,10 @@ interface GenerateWorkflowContentProps {
   confirmAndGenerate?: () => void
   isReadyToGenerate?: boolean
   pendingModeSelection?: boolean
-  selectAnalysisMode?: (mode: 'simple' | 'detailed') => void
+  selectAnalysisMode?: (mode: 'simple' | 'detailed' | 'intended-use') => void
   submitIsoChecklist?: (answers: Record<string, string>) => void
+  submitIntendedIsoChecklist?: (answers: Record<string, string>) => void
+  submitIntendedUseHazards?: (intendedUse: string, selectedHazards: string[]) => void
   searchStartDate?: string
   searchEndDate?: string
   setSearchStartDate?: (d: string) => void
@@ -61,6 +64,8 @@ export default function GenerateWorkflowContent({
   pendingModeSelection,
   selectAnalysisMode,
   submitIsoChecklist,
+  submitIntendedIsoChecklist,
+  submitIntendedUseHazards,
   searchStartDate: searchStartDateProp,
   searchEndDate: searchEndDateProp,
   setSearchStartDate,
@@ -556,9 +561,18 @@ export default function GenerateWorkflowContent({
                 )}
               </div>
             )}
-            {message.isoChecklist && submitIsoChecklist && (
+            {message.isoChecklist && (submitIsoChecklist || submitIntendedIsoChecklist) && (
               <IsoChecklistPanel
-                onSubmit={submitIsoChecklist}
+                onSubmit={message.isoChecklistDefaults && submitIntendedIsoChecklist ? submitIntendedIsoChecklist : submitIsoChecklist!}
+                isLoading={isLoading}
+                disabled={phase !== 'chat'}
+                styles={styles}
+                defaultAnswers={message.isoChecklistDefaults}
+              />
+            )}
+            {message.intendedUseHazard && submitIntendedUseHazards && (
+              <IntendedUseHazardPanel
+                onSubmit={submitIntendedUseHazards}
                 isLoading={isLoading}
                 disabled={phase !== 'chat'}
                 styles={styles}
@@ -588,6 +602,14 @@ export default function GenerateWorkflowContent({
                 style={{ width: 'auto', marginTop: 0 }}
               >
                 More Questions
+              </button>
+              <button
+                onClick={() => selectAnalysisMode('intended-use')}
+                disabled={isLoading}
+                className={styles.generateButton}
+                style={{ width: 'auto', marginTop: 0 }}
+              >
+                Input Intended Use
               </button>
             </div>
           </div>

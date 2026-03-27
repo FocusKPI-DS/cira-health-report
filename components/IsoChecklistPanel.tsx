@@ -8,14 +8,16 @@ interface IsoChecklistPanelProps {
   isLoading: boolean
   disabled?: boolean
   styles?: Record<string, string>
+  defaultAnswers?: Record<string, string>
 }
 
-export default function IsoChecklistPanel({ onSubmit, isLoading, disabled, styles }: IsoChecklistPanelProps) {
+export default function IsoChecklistPanel({ onSubmit, isLoading, disabled, styles, defaultAnswers }: IsoChecklistPanelProps) {
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
     const defaults: Record<string, string> = {}
     for (const mod of ISO_MODULES) {
       for (const q of mod.questions) {
-        defaults[`${mod.module}-${q.index}`] = q.options[0]
+        const key = `${mod.module}-${q.index}`
+        defaults[key] = defaultAnswers?.[key] ?? q.options[0]
       }
     }
     return defaults

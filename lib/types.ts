@@ -96,6 +96,10 @@ export interface Message {
   hazardSummary?: HazardSummaryAction
   /** ISO 24971 checklist form — rendered as interactive form panel */
   isoChecklist?: boolean
+  /** Pre-filled answers for ISO checklist from agent (intended use flow) */
+  isoChecklistDefaults?: Record<string, string>
+  /** Intended Use hazard selector panel */
+  intendedUseHazard?: boolean
 }
 
 // ─── Agent types ──────────────────────────────────────────────────────────────
@@ -149,6 +153,13 @@ export interface HazardSummaryAction {
   hazard_categories: string[]
 }
 
+export interface ShowIsoChecklistAction {
+  type: 'show_iso_checklist'
+  message: string
+  /** key: "${module}-${questionIndex}", value: selected option string */
+  pre_filled_answers: Record<string, string>
+}
+
 export interface ErrorAction {
   type: 'error'
   message: string
@@ -168,6 +179,7 @@ export type AgentAction =
   | StartAnalysisAction
   | ModuleQuestionAction
   | HazardSummaryAction
+  | ShowIsoChecklistAction
   | ErrorAction
   | ToolCallAction
 

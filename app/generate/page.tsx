@@ -88,6 +88,7 @@ function GenerateContent() {
           answerModuleQuestion={workflow.answerModuleQuestion}
           confirmAndGenerate={workflow.confirmAndGenerate}
           submitIsoChecklist={workflow.submitIsoChecklist}
+          submitIntendedIsoChecklist={workflow.submitIntendedIsoChecklist}
           isReadyToGenerate={workflow.isReadyToGenerate}
           pendingModeSelection={workflow.pendingModeSelection}
           selectAnalysisMode={workflow.selectAnalysisMode}
