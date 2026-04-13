@@ -287,10 +287,19 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
 
         // Send tool_result back to agent (condensed summary for LLM context)
         const dbTotal = searchData?.db_results?.total ?? searchData?.total ?? 0
+        const fdaCount = searchData?.fda_results?.length ?? 0
+        const aiCount = searchData?.ai_results?.length ?? 0
+        const totalResults = dbTotal + fdaCount + aiCount
         const toolResult: AgentHistoryMessage = {
           role: 'tool_result',
           tool: a.tool,
-          data: { total: dbTotal, keyword: query },
+          data: {
+            total: dbTotal,
+            fda_count: fdaCount,
+            ai_count: aiCount,
+            total_results: totalResults,
+            keyword: query
+          },
         }
         const newHistory: AgentHistoryMessage[] = [
           ...agentHistoryRef.current,

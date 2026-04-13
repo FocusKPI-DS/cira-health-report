@@ -104,11 +104,11 @@ export default function SearchTestingPage() {
         <div>
           <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
             {elapsed !== null && `${elapsed}ms · `}
-            FDA: {result.fda_results.length} · AI: {result.ai_results.length} · DB: {result.db_results?.total ?? '—'}
+            FDA: {result.fda_results?.length ?? 0} · AI: {result.ai_results?.length ?? 0} · DB: {result.db_results?.total ?? '—'}
           </div>
 
           {/* FDA Results */}
-          {result.fda_results.length > 0 && (
+          {(result.fda_results?.length ?? 0) > 0 && (
             <Section title={`FDA Results (${result.fda_results.length})`} subtitle={result.fda_results_text}>
               <table style={tableStyle}>
                 <thead>
@@ -133,7 +133,7 @@ export default function SearchTestingPage() {
           )}
 
           {/* AI Results */}
-          {result.ai_results.length > 0 && (
+          {(result.ai_results?.length ?? 0) > 0 && (
             <Section title={`AI Results (${result.ai_results.length})`} subtitle={result.ai_results_text}>
               <table style={tableStyle}>
                 <thead>
