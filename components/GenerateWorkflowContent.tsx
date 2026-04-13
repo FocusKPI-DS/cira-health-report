@@ -625,7 +625,7 @@ export default function GenerateWorkflowContent({
             </div>
           </div>
           <div className={styles.messageContent}>
-            <div className={styles.loading}>⏳</div>
+            <div className={styles.loadingSpinner}>⏳</div>
           </div>
         </div>
       )}
@@ -639,7 +639,7 @@ export default function GenerateWorkflowContent({
             </div>
           </div>
           <div className={styles.messageContent}>
-            <div className={styles.loading}>
+            <div className={styles.loadingSpinner}>
               ⏳
               {countdown !== null && (
                 <span style={{ marginLeft: 8, fontSize: 14 }}>{formatCountdown(countdown)}</span>
@@ -669,7 +669,7 @@ export default function GenerateWorkflowContent({
               />
               <button
                 type="submit"
-                className={styles.inlineButton}
+                className={`${styles.inlineButton} ${isLoading ? styles.loading : ''}`}
                 disabled={isLoading || !inputText.trim()}
               >
                 Send

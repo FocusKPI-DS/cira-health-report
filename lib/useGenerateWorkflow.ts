@@ -248,6 +248,11 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const selectedProductsRef = useRef<SimilarProduct[]>([])
   // Stores search results fetched client-side when handling tool_call
   const pendingSearchResultsRef = useRef<import('./types').DbResults | null>(null)
+  // Stores complete search results (FDA + AI + DB) from tool_call
+  const pendingFdaResultsRef = useRef<SimilarProduct[]>([])
+  const pendingAiResultsRef = useRef<SimilarProduct[]>([])
+  const pendingFdaTextRef = useRef<string>('')
+  const pendingAiTextRef = useRef<string>('')
 
   const handleAction = useCallback(async (action: AgentAction) => {
     switch (action.type) {
@@ -261,18 +266,27 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       case 'tool_call': {
         const a = action as ToolCallAction
         const query = a.params?.query || a.params?.keyword || ''
-        let dbResults = null
+        let searchData = null
         try {
           const headers = await getAuthHeaders()
           const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(query)}&limit=20&start_date=2010-01-01`
           const res = await fetch(url, { headers })
-          if (res.ok) dbResults = await res.json()
+          if (res.ok) searchData = await res.json()
         } catch (e) {
           console.error('[tool_call] Search failed', e)
         }
-        pendingSearchResultsRef.current = dbResults?.db_results ?? dbResults
+
+        // Save all search results for use in show_products action
+        if (searchData) {
+          pendingSearchResultsRef.current = searchData.db_results ?? null
+          pendingFdaResultsRef.current = searchData.fda_results ?? []
+          pendingAiResultsRef.current = searchData.ai_results ?? []
+          pendingFdaTextRef.current = searchData.fda_results_text ?? ''
+          pendingAiTextRef.current = searchData.ai_results_text ?? ''
+        }
+
         // Send tool_result back to agent (condensed summary for LLM context)
-        const dbTotal = dbResults?.db_results?.total ?? dbResults?.total ?? 0
+        const dbTotal = searchData?.db_results?.total ?? searchData?.total ?? 0
         const toolResult: AgentHistoryMessage = {
           role: 'tool_result',
           tool: a.tool,
@@ -291,14 +305,19 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       case 'show_products': {
         const a = action as ShowProductsAction
         const resultSet: SearchResultSet = {
-          fdaResults: a.fda_results ?? [],
-          aiResults: a.ai_results ?? [],
-          fdaResultsText: a.fda_results_text ?? '',
-          aiResultsText: a.ai_results_text ?? '',
-          // prefer client-side fetched results; fall back to whatever agent returned
+          // Prefer client-side fetched results from tool_call; fall back to whatever agent returned
+          fdaResults: pendingFdaResultsRef.current.length > 0 ? pendingFdaResultsRef.current : (a.fda_results ?? []),
+          aiResults: pendingAiResultsRef.current.length > 0 ? pendingAiResultsRef.current : (a.ai_results ?? []),
+          fdaResultsText: pendingFdaTextRef.current || a.fda_results_text || '',
+          aiResultsText: pendingAiTextRef.current || a.ai_results_text || '',
           dbResults: pendingSearchResultsRef.current ?? a.db_results,
         }
+        // Clear pending results
         pendingSearchResultsRef.current = null
+        pendingFdaResultsRef.current = []
+        pendingAiResultsRef.current = []
+        pendingFdaTextRef.current = ''
+        pendingAiTextRef.current = ''
         // Reset db selection on new search
         setDbSearchSelection(null)
         dbSearchSelectionRef.current = null

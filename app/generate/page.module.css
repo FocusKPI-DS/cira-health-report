@@ -241,15 +241,19 @@
 
 .inlineInput,
 .inlineTextarea {
-  padding: 0.875rem;
-  background: white;
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  border-radius: 6px;
-  font-size: 1rem;
-  font-family: inherit;
-  color: #1e293b;
-  transition: all 0.3s ease;
-  width: 100%;
+  padding: 0.75rem 0.875rem !important;
+  margin: 0 !important;
+  background: white !important;
+  border: 1px solid rgba(14, 165, 233, 0.2) !important;
+  border-radius: 6px !important;
+  font-size: 0.95rem !important;
+  font-family: inherit !important;
+  color: #1e293b !important;
+  transition: all 0.3s ease !important;
+  width: 100% !important;
+  height: 2.75rem !important;
+  box-sizing: border-box !important;
+  line-height: 1.2 !important;
 }
 
 .inlineTextarea {
@@ -369,21 +373,45 @@
 }
 
 .inlineButton {
-  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
-  color: white;
-  font-size: 0.95rem;
-  font-weight: 600;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%) !important;
+  color: white !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  padding: 0 1.25rem !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.2) !important;
+  height: 2.75rem !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
 }
 
-.inlineButton:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+/* Hover effect - only for enabled buttons */
+.inlineButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+}
+
+/* Disabled state when input is empty - keep colorful but dimmed */
+.inlineButton:disabled:not(.loading) {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  /* Keep the gradient background */
+}
+
+/* Loading state (Thinking...) - turn gray */
+.inlineButton.loading {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%) !important;
+  box-shadow: none !important;
+  /* Keep same size for consistent alignment */
 }
 
 /* ── Chat input row (right-aligned, like a user message) ── */
@@ -398,11 +426,12 @@
 }
 
 .chatInputForm {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 .chatInputForm .inlineInput {
@@ -453,7 +482,7 @@
   transform: none;
 }
 
-.loading {
+.loadingSpinner {
   text-align: center;
   font-size: 2rem;
   margin-top: 1rem;
