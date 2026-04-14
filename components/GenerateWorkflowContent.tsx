@@ -595,27 +595,27 @@ export default function GenerateWorkflowContent({
                   <input
                     type="checkbox"
                     checked={isAllChecked}
-                    onChange={() => isLatest && toggleDbItem('keyword', db.keyword, db.keyword)}
+                    onChange={() => isLatest && toggleDbItem('keyword', db!.keyword, db!.keyword)}
                     disabled={!isLatest}
                     className={styles.checkbox}
                   />
-                  All ({db.total.toLocaleString()} records)
+                  All ({db!.total.toLocaleString()} records)
                 </label>
               </div>
 
               {/* By Brand */}
-              {db.by_brand.length > 0 && (
+              {db!.by_brand.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    The following {db.by_brand.length} result{db.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
+                    The following {db!.by_brand.length} result{db!.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
                   </div>
                   <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                    {db.by_brand.map(item => (
+                    {db!.by_brand.map(item => (
                       <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
                         <input
                           type="checkbox"
                           checked={isBrandChecked(item.value)}
-                          onChange={() => isLatest && toggleDbItem('brand_name', item.value, db.keyword)}
+                          onChange={() => isLatest && toggleDbItem('brand_name', item.value, db!.keyword)}
                           disabled={!isLatest}
                           className={styles.checkbox}
                         />
@@ -628,18 +628,18 @@ export default function GenerateWorkflowContent({
               )}
 
               {/* By Generic Name */}
-              {db.by_generic.length > 0 && (
+              {db!.by_generic.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    The following {db.by_generic.length} result{db.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
+                    The following {db!.by_generic.length} result{db!.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
                   </div>
                   <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                    {db.by_generic.map(item => (
+                    {db!.by_generic.map(item => (
                       <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
                         <input
                           type="checkbox"
                           checked={isGenericChecked(item.value)}
-                          onChange={() => isLatest && toggleDbItem('generic_name', item.value, db.keyword)}
+                          onChange={() => isLatest && toggleDbItem('generic_name', item.value, db!.keyword)}
                           disabled={!isLatest}
                           className={styles.checkbox}
                         />
@@ -652,18 +652,18 @@ export default function GenerateWorkflowContent({
               )}
 
               {/* By Product Code */}
-              {db.by_product_code.length > 0 && (
+              {db!.by_product_code.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                    The following {db.by_product_code.length} result{db.by_product_code.length !== 1 ? 's are' : ' is'} classified by product code
+                    The following {db!.by_product_code.length} result{db!.by_product_code.length !== 1 ? 's are' : ' is'} classified by product code
                   </div>
                   <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                    {db.by_product_code.map(item => (
+                    {db!.by_product_code.map(item => (
                       <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
                         <input
                           type="checkbox"
                           checked={isCodeChecked(item.value)}
-                          onChange={() => isLatest && toggleDbItem('product_code', item.value, db.keyword)}
+                          onChange={() => isLatest && toggleDbItem('product_code', item.value, db!.keyword)}
                           disabled={!isLatest}
                           className={styles.checkbox}
                         />
