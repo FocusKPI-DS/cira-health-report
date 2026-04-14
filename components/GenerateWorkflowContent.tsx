@@ -363,7 +363,7 @@ export default function GenerateWorkflowContent({
                                   {groups.by_brand.length > 0 && product.productCode && (
                                     <div style={{ marginBottom: 12 }}>
                                       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                        The following {groups.by_brand.length} result{groups.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
+                                        The following {groups.by_brand.length} result{groups.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name (Product Code: {product.productCode})
                                       </div>
                                       <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
                                         {groups.by_brand.map(item => {
@@ -392,7 +392,7 @@ export default function GenerateWorkflowContent({
                                   {groups.by_generic.length > 0 && product.productCode && (
                                     <div>
                                       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                        The following {groups.by_generic.length} result{groups.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
+                                        The following {groups.by_generic.length} result{groups.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name (Product Code: {product.productCode})
                                       </div>
                                       <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
                                         {groups.by_generic.map(item => {
@@ -506,7 +506,7 @@ export default function GenerateWorkflowContent({
                                   {groups.by_brand.length > 0 && product.productCode && (
                                     <div style={{ marginBottom: 12 }}>
                                       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                        The following {groups.by_brand.length} result{groups.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
+                                        The following {groups.by_brand.length} result{groups.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name (Product Code: {product.productCode})
                                       </div>
                                       <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
                                         {groups.by_brand.map(item => {
@@ -535,7 +535,7 @@ export default function GenerateWorkflowContent({
                                   {groups.by_generic.length > 0 && product.productCode && (
                                     <div>
                                       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                        The following {groups.by_generic.length} result{groups.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
+                                        The following {groups.by_generic.length} result{groups.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name (Product Code: {product.productCode})
                                       </div>
                                       <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
                                         {groups.by_generic.map(item => {
