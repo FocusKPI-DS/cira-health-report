@@ -63,6 +63,21 @@ export default function PHADetailsModal({ isOpen, onClose, analysisId, hazard, p
     }
   }, [isOpen])
 
+  // Handle Esc key to close modal
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation() // Prevent event from reaching parent modal
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const startIndex = (currentPage - 1) * recordsPerPage

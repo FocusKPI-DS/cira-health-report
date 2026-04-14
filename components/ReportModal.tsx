@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, JSX } from 'react'
+import { useState, useEffect, JSX } from 'react'
 import { useRouter } from 'next/navigation'
 import styles from './ReportModal.module.css'
 import { InfoIcon } from './Icons'
@@ -85,6 +85,18 @@ export default function ReportModal({ productName, intendedUse, hazards, analysi
   const handleCloseSignIn = () => {
     setShowSignInModal(false)
   }
+
+  // Handle Esc key to close modal (only if child modals are closed)
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !showPHADetailsModal && !showSignInModal) {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [showPHADetailsModal, showSignInModal, onClose])
 
   return (
     <>

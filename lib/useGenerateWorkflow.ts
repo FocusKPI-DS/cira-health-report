@@ -364,7 +364,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           ...(dbSel ? {
             dbSearchType: dbSel.type,
             dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
-            dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+            dbSearchKeyword: dbSel.keyword || undefined,
           } : {}),
         }
 
@@ -572,7 +572,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       ...(dbSel ? {
         dbSearchType: dbSel.type,
         dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
-        dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+        dbSearchKeyword: dbSel.keyword || undefined,
       } : {}),
     }
     setCollected(prev => ({
@@ -670,10 +670,10 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
             // Same type, same source (DB results): toggle value
             const already = prev.values.includes(value)
             const newValues = already ? prev.values.filter((v: string) => v !== value) : [...prev.values, value]
-            next = newValues.length > 0 ? { type, values: newValues, keyword: '' } : null
+            next = newValues.length > 0 ? { type, values: newValues, keyword: keywordOrProductCode } : null
           } else {
             // Different type or different source: clear previous, start fresh
-            next = { type, values: [value], keyword: '' }
+            next = { type, values: [value], keyword: keywordOrProductCode }
           }
         }
       }
@@ -715,7 +715,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       ...(dbSel ? {
         dbSearchType: dbSel.type,
         dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
-        dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+        dbSearchKeyword: dbSel.keyword || undefined,
       } : {}),
     }
     await startAnalysisGenerationWith(params, hazardCategoriesRef.current, 'detailed', hazardCategoriesRef.current)
@@ -756,7 +756,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
       ...(dbSel ? {
         dbSearchType: dbSel.type,
         dbSearchValues: dbSel.type !== 'keyword' ? dbSel.values : undefined,
-        dbSearchKeyword: dbSel.type === 'keyword' ? dbSel.keyword : undefined,
+        dbSearchKeyword: dbSel.keyword || undefined,
       } : {}),
     }
     await startAnalysisGenerationWith(params, hazards, 'detailed', hazards)
