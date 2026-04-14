@@ -635,22 +635,47 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const toggleDbItem = useCallback((
     type: DbSearchSelection['type'],
     value: string,      // ignored when type === 'keyword'
-    keyword: string,    // the full-text keyword (from dbResults.keyword)
+    keywordOrProductCode: string,    // the full-text keyword (from dbResults.keyword) or productCode (from FDA/AI product)
   ) => {
     setDbSearchSelection((prev: DbSearchSelection | null) => {
       let next: DbSearchSelection | null
 
       if (type === 'keyword') {
         // All — toggle off if already selected, else select
-        next = prev?.type === 'keyword' ? null : { type: 'keyword', values: [], keyword }
-      } else if (prev?.type === type) {
-        // Same group: multi-select within group
-        const already = prev.values.includes(value)
-        const newValues = already ? prev.values.filter((v: string) => v !== value) : [...prev.values, value]
+        next = prev?.type === 'keyword' ? null : { type: 'keyword', values: [], keyword: keywordOrProductCode }
+      } else if (type === 'product_code') {
+        // Product code selection from DB results
+        const already = prev?.type === type && prev.values.includes(value)
+        const newValues = already && prev ? prev.values.filter((v: string) => v !== value) : [value]
         next = newValues.length > 0 ? { type, values: newValues, keyword: '' } : null
       } else {
-        // Different group: clear previous, start fresh
-        next = { type, values: [value], keyword: '' }
+        // Brand or Generic name selection
+        // Could be from DB results (keyword) or from FDA/AI product groups (productCode)
+        const isProductCodeBased = keywordOrProductCode.length === 3 && keywordOrProductCode === keywordOrProductCode.toUpperCase()
+
+        if (isProductCodeBased) {
+          // Selection from FDA/AI product groups
+          if (prev?.type === type && prev?.productCode === keywordOrProductCode) {
+            // Same type and same product code: toggle value
+            const already = prev.values.includes(value)
+            const newValues = already ? prev.values.filter((v: string) => v !== value) : [...prev.values, value]
+            next = newValues.length > 0 ? { type, values: newValues, keyword: '', productCode: keywordOrProductCode } : null
+          } else {
+            // Different type or different product code: clear previous, start fresh
+            next = { type, values: [value], keyword: '', productCode: keywordOrProductCode }
+          }
+        } else {
+          // Selection from DB results
+          if (prev?.type === type && !prev?.productCode) {
+            // Same type, same source (DB results): toggle value
+            const already = prev.values.includes(value)
+            const newValues = already ? prev.values.filter((v: string) => v !== value) : [...prev.values, value]
+            next = newValues.length > 0 ? { type, values: newValues, keyword: '' } : null
+          } else {
+            // Different type or different source: clear previous, start fresh
+            next = { type, values: [value], keyword: '' }
+          }
+        }
       }
 
       dbSearchSelectionRef.current = next

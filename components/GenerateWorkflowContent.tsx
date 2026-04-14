@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Message, SimilarProduct, DbSearchSelection, DbResults } from '@/lib/types'
+import { useState, useRef, useEffect, Fragment } from 'react'
+import { Message, SimilarProduct, DbSearchSelection, DbResults, ProductCodeGroups } from '@/lib/types'
 import { CollectedParams } from '@/lib/useGenerateWorkflow'
-import { fetchMaudeCount } from '@/lib/fda-api'
+import { fetchMaudeCountsBatch } from '@/lib/fda-api'
 import { getAuthHeaders } from '@/lib/api-utils'
 import IsoChecklistPanel from '@/components/IsoChecklistPanel'
 import IntendedUseHazardPanel from '@/components/IntendedUseHazardPanel'
@@ -77,9 +77,16 @@ export default function GenerateWorkflowContent({
   const [retryInput, setRetryInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Date range values - must be defined before useEffect that uses them
+  const toDateStr = (d: Date) => d.toISOString().slice(0, 10)
+  const dbStartDate = searchStartDateProp ?? '2010-01-01'
+  const dbEndDate = searchEndDateProp ?? toDateStr(new Date())
+  const setDbStartDate = setSearchStartDate ?? (() => {})
+  const setDbEndDate = setSearchEndDate ?? (() => {})
+
   // MAUDE counts keyed by product code, fetched asynchronously from our DB
   const [maudeCounts, setMaudeCounts] = useState<Record<string, number>>({})
-  const fetchedCodes = useRef<Set<string>>(new Set())
+  const fetchedCodesKey = useRef<string>('')
 
   useEffect(() => {
     const allCodes = new Set<string>()
@@ -93,25 +100,96 @@ export default function GenerateWorkflowContent({
         if (p.productCode) allCodes.add(p.productCode)
       }
     }
-    for (const code of Array.from(allCodes)) {
-      if (fetchedCodes.current.has(code)) continue
-      fetchedCodes.current.add(code)
+
+    // Include date range in cache key so counts refresh when dates change
+    const currentKey = `${dbStartDate}|${dbEndDate}`
+    const dateRangeChanged = fetchedCodesKey.current !== currentKey
+
+    if (dateRangeChanged) {
+      // Clear counts when date range changes
+      setMaudeCounts({})
+      fetchedCodesKey.current = currentKey
+    }
+
+    // Collect codes that need to be fetched
+    const codesToFetch = Array.from(allCodes).filter(code =>
+      dateRangeChanged || maudeCounts[code] === undefined
+    )
+
+    if (codesToFetch.length > 0) {
+      // Batch fetch all counts in a single API call
       getAuthHeaders().then(headers =>
-        fetchMaudeCount(code, headers as Record<string, string>).then(count => {
-          setMaudeCounts(prev => ({ ...prev, [code]: count }))
+        fetchMaudeCountsBatch(codesToFetch, dbStartDate, dbEndDate, headers as Record<string, string>).then(counts => {
+          setMaudeCounts(prev => ({ ...prev, ...counts }))
         })
       )
     }
-  }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toDateStr = (d: Date) => d.toISOString().slice(0, 10)
-  const dbStartDate = searchStartDateProp ?? '2010-01-01'
-  const dbEndDate = searchEndDateProp ?? toDateStr(new Date())
-  const setDbStartDate = setSearchStartDate ?? (() => {})
-  const setDbEndDate = setSearchEndDate ?? (() => {})
+  }, [messages, dbStartDate, dbEndDate]) // eslint-disable-line react-hooks/exhaustive-deps
   // Per-message override of dbResults (after date re-query)
   const [dbResultsOverride, setDbResultsOverride] = useState<Record<string, DbResults>>({})
   const [dbDateLoading, setDbDateLoading] = useState(false)
+
+  // Product code groups (brand/generic) for expanded products
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
+  const [productGroups, setProductGroups] = useState<Record<string, ProductCodeGroups>>({})
+  const [productGroupsLoading, setProductGroupsLoading] = useState<Set<string>>(new Set())
+
+  // Handle selection within product code groups
+  const handleGroupItemToggle = (productCode: string, type: 'brand_name' | 'generic_name', value: string, product: SimilarProduct) => {
+    // When user selects a group item, deselect the main product checkbox
+    // because we're now using group-based filtering instead
+    if (selectedIds.has(product.id)) {
+      toggleProduct(product)
+    }
+
+    // Notify parent component through toggleDbItem with productCode
+    // This will update dbSearchSelection and handle mutual exclusion with DB results
+    toggleDbItem(type, value, productCode)
+  }
+
+  // Handle product toggle with expansion
+  const handleToggleProduct = async (product: SimilarProduct) => {
+    const wasSelected = selectedIds.has(product.id)
+
+    // Call parent's toggle function
+    toggleProduct(product)
+
+    // If product is being selected and has a product code, fetch and expand groups
+    if (!wasSelected && product.productCode) {
+      const code = product.productCode
+
+      // Add to loading set
+      setProductGroupsLoading(prev => new Set(prev).add(code))
+      setExpandedProducts(prev => new Set(prev).add(code))
+
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const headers = await getAuthHeaders()
+        const url = `${API_URL}/api/v1/anonclient/product-code-groups?product_code=${encodeURIComponent(code)}&start_date=${dbStartDate}&end_date=${dbEndDate}`
+        const res = await fetch(url, { headers })
+
+        if (res.ok) {
+          const data: ProductCodeGroups = await res.json()
+          setProductGroups(prev => ({ ...prev, [code]: data }))
+        }
+      } catch (e) {
+        console.error(`[Product Groups] Failed to fetch groups for ${code}:`, e)
+      } finally {
+        setProductGroupsLoading(prev => {
+          const next = new Set(prev)
+          next.delete(code)
+          return next
+        })
+      }
+    } else if (wasSelected && product.productCode) {
+      // Collapse when deselecting
+      setExpandedProducts(prev => {
+        const next = new Set(prev)
+        next.delete(product.productCode!)
+        return next
+      })
+    }
+  }
 
   const handleApplyDates = async (messageId: string, keyword: string) => {
     if (!keyword) return
@@ -229,32 +307,124 @@ export default function GenerateWorkflowContent({
                   </tr>
                 </thead>
                 <tbody>
-                  {fdaProducts.map((product) => (
-                    <tr key={product.id} className={styles.tr}>
-                      <td className={styles.td}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(product.id)}
-                          onChange={() => isLatest && toggleProduct(product)}
-                          disabled={!isLatest}
-                          className={styles.checkbox}
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <div className={styles.productCodeCell}>
-                          <span className={styles.productCode}>{product.productCode}{product.productCode in maudeCounts ? ` (${maudeCounts[product.productCode].toLocaleString()})` : ' (...)'}</span>
-                          {product.fdaClassificationLink && (
-                            <a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
-                              View FDA Classification →
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className={styles.td}>{product.device}</td>
-                      <td className={styles.td}>{product.regulationDescription}</td>
-                      <td className={styles.td}>{product.medicalSpecialty}</td>
-                    </tr>
-                  ))}
+                  {fdaProducts.map((product) => {
+                    const isExpanded = product.productCode && expandedProducts.has(product.productCode)
+                    const groups = product.productCode ? productGroups[product.productCode] : null
+                    const isLoading = product.productCode && productGroupsLoading.has(product.productCode)
+
+                    return (
+                      <Fragment key={product.id}>
+                        <tr
+                          className={styles.tr}
+                          onClick={(e) => {
+                            // Don't trigger if clicking on checkbox or links
+                            if (isLatest && e.target instanceof HTMLElement &&
+                                !e.target.closest('input') &&
+                                !e.target.closest('a')) {
+                              handleToggleProduct(product)
+                            }
+                          }}
+                          style={{ cursor: isLatest ? 'pointer' : 'default' }}
+                        >
+                          <td className={styles.td}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(product.id)}
+                              onChange={(e) => {
+                                e.stopPropagation()
+                                isLatest && handleToggleProduct(product)
+                              }}
+                              disabled={!isLatest}
+                              className={styles.checkbox}
+                            />
+                          </td>
+                          <td className={styles.td}>
+                            <div className={styles.productCodeCell}>
+                              <span className={styles.productCode}>{product.productCode}{product.productCode in maudeCounts ? ` (${maudeCounts[product.productCode].toLocaleString()})` : ' (...)'}</span>
+                              {product.fdaClassificationLink && (
+                                <a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} onClick={(e) => e.stopPropagation()}>
+                                  View FDA Classification →
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                          <td className={styles.td}>{product.device}</td>
+                          <td className={styles.td}>{product.regulationDescription}</td>
+                          <td className={styles.td}>{product.medicalSpecialty}</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={5} style={{ padding: '12px 16px', background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
+                              {isLoading ? (
+                                <div style={{ fontSize: 13, color: '#666' }}>Loading groups...</div>
+                              ) : groups ? (
+                                <div>
+                                  {/* Brand name groups */}
+                                  {groups.by_brand.length > 0 && product.productCode && (
+                                    <div style={{ marginBottom: 12 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                        The following {groups.by_brand.length} result{groups.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
+                                      </div>
+                                      <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                                        {groups.by_brand.map(item => {
+                                          const isChecked = dbSearchSelection?.type === 'brand_name'
+                                            && dbSearchSelection?.productCode === product.productCode
+                                            && dbSearchSelection.values.includes(item.value)
+
+                                          return (
+                                            <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                                              <input
+                                                type="checkbox"
+                                                className={styles.checkbox}
+                                                checked={isChecked}
+                                                onChange={() => isLatest && handleGroupItemToggle(product.productCode!, 'brand_name', item.value, product)}
+                                                disabled={!isLatest}
+                                              />
+                                              <span style={{ flex: 1 }}>{item.value}</span>
+                                              <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Generic name groups */}
+                                  {groups.by_generic.length > 0 && product.productCode && (
+                                    <div>
+                                      <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                        The following {groups.by_generic.length} result{groups.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
+                                      </div>
+                                      <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                                        {groups.by_generic.map(item => {
+                                          const isChecked = dbSearchSelection?.type === 'generic_name'
+                                            && dbSearchSelection?.productCode === product.productCode
+                                            && dbSearchSelection.values.includes(item.value)
+
+                                          return (
+                                            <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                                              <input
+                                                type="checkbox"
+                                                className={styles.checkbox}
+                                                checked={isChecked}
+                                                onChange={() => isLatest && handleGroupItemToggle(product.productCode!, 'generic_name', item.value, product)}
+                                                disabled={!isLatest}
+                                              />
+                                              <span style={{ flex: 1 }}>{item.value}</span>
+                                              <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -272,40 +442,132 @@ export default function GenerateWorkflowContent({
             <div className={styles.tableContainer}>
               <table className={styles.table}>
                 <tbody>
-                  {aiProducts.map((product) => (
-                    <tr key={product.id} className={styles.tr}>
-                      <td className={styles.td} style={{ width: 80, verticalAlign: 'top', paddingTop: 20 }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(product.id)}
-                          onChange={() => isLatest && toggleProduct(product)}
-                          disabled={!isLatest}
-                          className={styles.checkbox}
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <div style={{ lineHeight: 1.6 }}>
-                          <div>
-                            <strong>Product Code:</strong> {product.productCode}{product.productCode in maudeCounts ? ` (${maudeCounts[product.productCode].toLocaleString()})` : ' (...)'}
-                            {product.fdaClassificationLink && (
-                              <>&nbsp;&nbsp;&nbsp;<a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} style={{ fontSize: 12 }}>View FDA Classification</a></>
-                            )}
-                          </div>
-                          {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
-                          {product.regulationNumber && (
-                            <div>
-                              <strong>Regulation Number:</strong>&nbsp;
-                              <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`} target="_blank" rel="noopener noreferrer" className={styles.fdaLink}>
-                                {product.regulationNumber}
-                              </a>
+                  {aiProducts.map((product) => {
+                    const isExpanded = product.productCode && expandedProducts.has(product.productCode)
+                    const groups = product.productCode ? productGroups[product.productCode] : null
+                    const isLoading = product.productCode && productGroupsLoading.has(product.productCode)
+
+                    return (
+                      <Fragment key={product.id}>
+                        <tr
+                          className={styles.tr}
+                          onClick={(e) => {
+                            // Don't trigger if clicking on checkbox or links
+                            if (isLatest && e.target instanceof HTMLElement &&
+                                !e.target.closest('input') &&
+                                !e.target.closest('a')) {
+                              handleToggleProduct(product)
+                            }
+                          }}
+                          style={{ cursor: isLatest ? 'pointer' : 'default' }}
+                        >
+                          <td className={styles.td} style={{ width: 80, verticalAlign: 'top', paddingTop: 20 }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(product.id)}
+                              onChange={(e) => {
+                                e.stopPropagation()
+                                isLatest && handleToggleProduct(product)
+                              }}
+                              disabled={!isLatest}
+                              className={styles.checkbox}
+                            />
+                          </td>
+                          <td className={styles.td}>
+                            <div style={{ lineHeight: 1.6 }}>
+                              <div>
+                                <strong>Product Code:</strong> {product.productCode}{product.productCode in maudeCounts ? ` (${maudeCounts[product.productCode].toLocaleString()})` : ' (...)'}
+                                {product.fdaClassificationLink && (
+                                  <>&nbsp;&nbsp;&nbsp;<a href={product.fdaClassificationLink} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} style={{ fontSize: 12 }} onClick={(e) => e.stopPropagation()}>View FDA Classification</a></>
+                                )}
+                              </div>
+                              {product.deviceName && <div><strong>Device Name:</strong> {product.deviceName}</div>}
+                              {product.regulationNumber && (
+                                <div>
+                                  <strong>Regulation Number:</strong>&nbsp;
+                                  <a href={`https://www.ecfr.gov/current/title-21/section-${product.regulationNumber}`} target="_blank" rel="noopener noreferrer" className={styles.fdaLink} onClick={(e) => e.stopPropagation()}>
+                                    {product.regulationNumber}
+                                  </a>
+                                </div>
+                              )}
+                              {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
+                              {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
                             </div>
-                          )}
-                          {product.deviceClass && <div><strong>Device Class:</strong> Class {toRoman(product.deviceClass)}</div>}
-                          {product.reason && <div><strong>Reason:</strong> {product.reason}</div>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={2} style={{ padding: '12px 16px', background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
+                              {isLoading ? (
+                                <div style={{ fontSize: 13, color: '#666' }}>Loading groups...</div>
+                              ) : groups ? (
+                                <div>
+                                  {/* Brand name groups */}
+                                  {groups.by_brand.length > 0 && product.productCode && (
+                                    <div style={{ marginBottom: 12 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                        The following {groups.by_brand.length} result{groups.by_brand.length !== 1 ? 's are' : ' is'} classified by brand name
+                                      </div>
+                                      <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                                        {groups.by_brand.map(item => {
+                                          const isChecked = dbSearchSelection?.type === 'brand_name'
+                                            && dbSearchSelection?.productCode === product.productCode
+                                            && dbSearchSelection.values.includes(item.value)
+
+                                          return (
+                                            <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                                              <input
+                                                type="checkbox"
+                                                className={styles.checkbox}
+                                                checked={isChecked}
+                                                onChange={() => isLatest && handleGroupItemToggle(product.productCode!, 'brand_name', item.value, product)}
+                                                disabled={!isLatest}
+                                              />
+                                              <span style={{ flex: 1 }}>{item.value}</span>
+                                              <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Generic name groups */}
+                                  {groups.by_generic.length > 0 && product.productCode && (
+                                    <div>
+                                      <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                        The following {groups.by_generic.length} result{groups.by_generic.length !== 1 ? 's are' : ' is'} classified by generic name
+                                      </div>
+                                      <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                                        {groups.by_generic.map(item => {
+                                          const isChecked = dbSearchSelection?.type === 'generic_name'
+                                            && dbSearchSelection?.productCode === product.productCode
+                                            && dbSearchSelection.values.includes(item.value)
+
+                                          return (
+                                            <label key={item.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: isLatest ? 'pointer' : 'default', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                                              <input
+                                                type="checkbox"
+                                                className={styles.checkbox}
+                                                checked={isChecked}
+                                                onChange={() => isLatest && handleGroupItemToggle(product.productCode!, 'generic_name', item.value, product)}
+                                                disabled={!isLatest}
+                                              />
+                                              <span style={{ flex: 1 }}>{item.value}</span>
+                                              <span style={{ color: '#9ca3af', fontSize: 12 }}>{item.count.toLocaleString()}</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

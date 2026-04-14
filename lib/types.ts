@@ -15,11 +15,20 @@ export interface DbResults {
   by_product_code: DbResultGroup[]
 }
 
-/** Tracks what the user has selected in the DB results panel */
+/** Product code grouping results (brand/generic only) */
+export interface ProductCodeGroups {
+  product_code: string
+  total: number
+  by_brand: DbResultGroup[]
+  by_generic: DbResultGroup[]
+}
+
+/** Tracks what the user has selected in the DB results panel or product code groups */
 export interface DbSearchSelection {
   type: DbSearchType
   values: string[]      // for product_code / brand_name / generic_name
   keyword: string       // for keyword (All)
+  productCode?: string  // for brand/generic selections within a specific product code
 }
 
 export interface SearchResultSet {
