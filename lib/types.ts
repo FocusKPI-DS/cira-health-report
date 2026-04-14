@@ -28,6 +28,7 @@ export interface SearchResultSet {
   fdaResultsText: string
   aiResultsText: string
   dbResults?: DbResults
+  keyword?: string  // The search keyword used for this result set
 }
 
 export interface SimilarProduct {
@@ -174,6 +175,13 @@ export interface ToolCallAction {
   params: Record<string, string>
 }
 
+export interface UpdateDateRangeAction {
+  type: 'update_date_range'
+  start_date: string
+  end_date: string
+  message: string
+}
+
 export type AgentAction =
   | AskAction
   | MessageAction
@@ -184,6 +192,7 @@ export type AgentAction =
   | ShowIsoChecklistAction
   | ErrorAction
   | ToolCallAction
+  | UpdateDateRangeAction
 
 export interface AgentHistoryMessage {
   role: 'user' | 'assistant' | 'tool_result'

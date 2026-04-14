@@ -4,7 +4,7 @@ import {
   Message, SimilarProduct, Hazard, SearchResultSet,
   AgentAction, AgentHistoryMessage, AgentResponse,
   ShowProductsAction, StartAnalysisAction, ModuleQuestionAction, HazardSummaryAction,
-  ShowIsoChecklistAction, ToolCallAction, DbSearchSelection,
+  ShowIsoChecklistAction, ToolCallAction, UpdateDateRangeAction, DbSearchSelection,
 } from './types'
 import { computeHazardCategories } from './iso-checklist'
 import { analysisApi, AnalysisStatusResponse } from './analysis-api'
@@ -136,9 +136,9 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     if (initialProductName) {
       // Product name was pre-filled (e.g. via ?productName=). Show a greeting and
       // wait for the user to confirm — don't fire the API automatically.
-      appendMessage('ai', `I'm ready to help you generate a PHA Analysis for **${initialProductName}**. Press Send to search for matching FDA products, or type a different device name or product code.`)
+      appendMessage('ai', `I'm ready to help you generate a PHA Analysis for **${initialProductName}**. Press Send to search for matching FDA products, or type a different device name or product code.\n\nThe default search date range is **${searchStartDateRef.current}** to **${searchEndDateRef.current}**. You can modify this range later if needed.`)
     } else {
-      appendMessage('ai', "Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.")
+      appendMessage('ai', `Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.\n\nThe default search date range is **${searchStartDateRef.current}** to **${searchEndDateRef.current}**. You can modify this range later if needed.`)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -253,6 +253,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
   const pendingAiResultsRef = useRef<SimilarProduct[]>([])
   const pendingFdaTextRef = useRef<string>('')
   const pendingAiTextRef = useRef<string>('')
+  const pendingKeywordRef = useRef<string>('')
 
   const handleAction = useCallback(async (action: AgentAction) => {
     switch (action.type) {
@@ -263,13 +264,24 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
         break
       }
 
+      case 'update_date_range': {
+        const a = action as UpdateDateRangeAction
+        // Update global date state
+        setSearchStartDateAndRef(a.start_date)
+        setSearchEndDateAndRef(a.end_date)
+        // Show confirmation message
+        appendMessage('ai', a.message)
+        setSuggestedOptions([])
+        break
+      }
+
       case 'tool_call': {
         const a = action as ToolCallAction
         const query = a.params?.query || a.params?.keyword || ''
         let searchData = null
         try {
           const headers = await getAuthHeaders()
-          const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(query)}&limit=20&start_date=2010-01-01`
+          const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(query)}&limit=20&start_date=${searchStartDateRef.current}&end_date=${searchEndDateRef.current}`
           const res = await fetch(url, { headers })
           if (res.ok) searchData = await res.json()
         } catch (e) {
@@ -283,6 +295,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           pendingAiResultsRef.current = searchData.ai_results ?? []
           pendingFdaTextRef.current = searchData.fda_results_text ?? ''
           pendingAiTextRef.current = searchData.ai_results_text ?? ''
+          pendingKeywordRef.current = query  // Save the search keyword
         }
 
         // Send tool_result back to agent (condensed summary for LLM context)
@@ -320,12 +333,14 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
           fdaResultsText: pendingFdaTextRef.current || a.fda_results_text || '',
           aiResultsText: pendingAiTextRef.current || a.ai_results_text || '',
           dbResults: pendingSearchResultsRef.current ?? a.db_results,
+          keyword: pendingKeywordRef.current || (pendingSearchResultsRef.current ?? a.db_results)?.keyword || '',
         }
         // Clear pending results
         pendingSearchResultsRef.current = null
         pendingFdaResultsRef.current = []
         pendingAiResultsRef.current = []
         pendingFdaTextRef.current = ''
+        pendingKeywordRef.current = ''
         pendingAiTextRef.current = ''
         // Reset db selection on new search
         setDbSearchSelection(null)
@@ -753,7 +768,7 @@ export function useGenerateWorkflow(options: UseGenerateWorkflowOptions = {}) {
     setMessages([{
       id: '1',
       type: 'ai',
-      content: "Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.",
+      content: `Hello! I'm here to help you generate a PHA Analysis. What is the name of your device? If you already know your FDA product code, you can enter it directly — e.g. **KZH**.\n\nThe default search date range is **${searchStartDateRef.current}** to **${searchEndDateRef.current}**. You can modify this range later if needed.`,
       timestamp: Date.now(),
     }])
     setSuggestedOptions([])

@@ -114,21 +114,12 @@ export default function GenerateWorkflowContent({
   const [dbDateLoading, setDbDateLoading] = useState(false)
 
   const handleApplyDates = async (messageId: string, keyword: string) => {
-    setDbDateLoading(true)
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const headers = await getAuthHeaders()
-      const url = `${API_URL}/api/v1/anonclient/search-fda-products?search_type=keywords&deviceName=${encodeURIComponent(keyword)}&limit=20&start_date=${dbStartDate}&end_date=${dbEndDate}`
-      const res = await fetch(url, { headers })
-      if (res.ok) {
-        const data = await res.json()
-        setDbResultsOverride(prev => ({ ...prev, [messageId]: data.db_results ?? data }))
-      }
-    } catch (e) {
-      console.error('[DB Search] Date re-query failed', e)
-    } finally {
-      setDbDateLoading(false)
-    }
+    if (!keyword) return
+    // Update global date state first
+    setDbStartDate(dbStartDate)
+    setDbEndDate(dbEndDate)
+    // Trigger a new search with updated dates via retrySearch
+    retrySearch(keyword)
   }
 
   // Focus input on mount
@@ -188,9 +179,36 @@ export default function GenerateWorkflowContent({
     const fdaProducts = results.fdaResults ?? []
     const aiProducts = results.aiResults ?? []
     const isLatest = message.id === latestSearchMsgId
+    const db = results.dbResults ? (dbResultsOverride[message.id] ?? results.dbResults) : null
+    const keyword = results.keyword || db?.keyword || ''
 
     return (
       <div>
+        {/* Date range filter - always show at top */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap', paddingBottom: 12, borderBottom: '1px solid #e5e7eb' }}>
+          <span style={{ fontSize: 13, color: '#555', fontWeight: 500 }}>Date range:</span>
+          <input
+            type="date"
+            value={dbStartDate}
+            onChange={e => setDbStartDate(e.target.value)}
+            style={{ fontSize: 13, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4 }}
+          />
+          <span style={{ fontSize: 13, color: '#555' }}>to</span>
+          <input
+            type="date"
+            value={dbEndDate}
+            onChange={e => setDbEndDate(e.target.value)}
+            style={{ fontSize: 13, padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: 4 }}
+          />
+          <button
+            onClick={() => handleApplyDates(message.id, keyword)}
+            disabled={dbDateLoading || !keyword}
+            style={{ fontSize: 13, padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#f9fafb', cursor: (dbDateLoading || !keyword) ? 'not-allowed' : 'pointer', fontWeight: 500, opacity: !keyword ? 0.5 : 1 }}
+          >
+            {dbDateLoading ? 'Loading…' : 'Apply'}
+          </button>
+        </div>
+
         {/* FDA results */}
         {fdaProducts.length > 0 && (
           <>
@@ -296,7 +314,6 @@ export default function GenerateWorkflowContent({
 
         {/* DB results */}
         {results.dbResults && (() => {
-          const db = dbResultsOverride[message.id] ?? results.dbResults!
           const sel = dbSearchSelection
 
           const isAllChecked = sel?.type === 'keyword'
@@ -307,32 +324,7 @@ export default function GenerateWorkflowContent({
           return (
             <div style={{ marginTop: 20 }}>
               <div style={{ fontSize: 14, color: '#666', marginBottom: 10 }}>
-                Our database contains <strong>{db.total.toLocaleString()}</strong> MAUDE events matching &quot;{db.keyword}&quot;. Select a grouping below to use as analysis source.
-              </div>
-
-              {/* Date range filter */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, color: '#555' }}>Date range:</span>
-                <input
-                  type="date"
-                  value={dbStartDate}
-                  onChange={e => setDbStartDate(e.target.value)}
-                  style={{ fontSize: 13, padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 4 }}
-                />
-                <span style={{ fontSize: 13, color: '#555' }}>to</span>
-                <input
-                  type="date"
-                  value={dbEndDate}
-                  onChange={e => setDbEndDate(e.target.value)}
-                  style={{ fontSize: 13, padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 4 }}
-                />
-                <button
-                  onClick={() => handleApplyDates(message.id, db.keyword)}
-                  disabled={dbDateLoading}
-                  style={{ fontSize: 13, padding: '3px 10px', border: '1px solid #d1d5db', borderRadius: 4, background: '#f9fafb', cursor: dbDateLoading ? 'wait' : 'pointer' }}
-                >
-                  {dbDateLoading ? 'Loading…' : 'Apply'}
-                </button>
+                Our database contains <strong>{db!.total.toLocaleString()}</strong> MAUDE events matching &quot;{db!.keyword}&quot;. Select a grouping below to use as analysis source.
               </div>
 
               {/* All */}
@@ -456,20 +448,25 @@ export default function GenerateWorkflowContent({
 
   return (
     <div className={styles.workflow}>
-      {/* ── Sticky floating action bar ── */}
-      {(collected.selectedProducts.length > 0 || dbSearchSelection !== null) && phase === 'chat' && (() => {
+      {/* ── Sticky floating info bar ── */}
+      {phase === 'chat' && (() => {
         const dbSel = dbSearchSelection
-        let label = ''
-        if (dbSel) {
-          if (dbSel.type === 'keyword') {
-            label = `All MAUDE events for "${dbSel.keyword}"`
+        let selectionLabel = ''
+        const hasSelection = collected.selectedProducts.length > 0 || dbSel !== null
+
+        if (hasSelection) {
+          if (dbSel) {
+            if (dbSel.type === 'keyword') {
+              selectionLabel = `All MAUDE events for "${dbSel.keyword}"`
+            } else {
+              const typeLabel = dbSel.type === 'brand_name' ? 'Brand' : dbSel.type === 'generic_name' ? 'Generic' : 'Product Code'
+              selectionLabel = `${typeLabel}: ${dbSel.values.join(', ')}`
+            }
           } else {
-            const typeLabel = dbSel.type === 'brand_name' ? 'Brand' : dbSel.type === 'generic_name' ? 'Generic' : 'Product Code'
-            label = `${typeLabel}: ${dbSel.values.join(', ')}`
+            selectionLabel = `FDA codes: ${collected.productCodes.join(', ')}`
           }
-        } else {
-          label = `FDA codes: ${collected.productCodes.join(', ')}`
         }
+
         return (
           <div style={{
             position: 'sticky',
@@ -487,16 +484,19 @@ export default function GenerateWorkflowContent({
               borderRadius: 10,
               padding: '8px 14px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
               fontSize: 13,
-              lineHeight: 1.4,
+              lineHeight: 1.6,
             }}>
-              <span style={{ color: '#555' }}>
-                Selected:{' '}
-                <strong style={{ color: '#111' }}>{label}</strong>
-              </span>
+              <div style={{ color: '#555' }}>
+                Date range:{' '}
+                <strong style={{ color: '#111' }}>{dbStartDate} to {dbEndDate}</strong>
+              </div>
+              {hasSelection && (
+                <div style={{ color: '#555' }}>
+                  Selected:{' '}
+                  <strong style={{ color: '#111' }}>{selectionLabel}</strong>
+                </div>
+              )}
             </div>
           </div>
         )
