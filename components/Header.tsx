@@ -10,10 +10,17 @@ interface HeaderProps {
   showAuthButtons?: boolean
   showUserMenu?: boolean
   showNavMenu?: boolean
+  hideEnterpriseButton?: boolean
   isDownloading?: boolean
 }
 
-export default function Header({ showAuthButtons = true, showUserMenu = false, showNavMenu = false, isDownloading = false }: HeaderProps) {
+export default function Header({
+  showAuthButtons = true,
+  showUserMenu = false,
+  showNavMenu = false,
+  hideEnterpriseButton = false,
+  isDownloading = false,
+}: HeaderProps) {
   const router = useRouter()
   const { user, isAnonymous, loading, currentTeamId } = useAuth()
 
@@ -76,11 +83,11 @@ export default function Header({ showAuthButtons = true, showUserMenu = false, s
         </div>
         {showNavMenu && (
           <nav className={styles.navMenu}>
-            <a href="#hero" onClick={(e) => handleNavClick(e, 'hero')} className={styles.navLink}>
-              Home
+            <a href="#how-it-works" onClick={(e) => handleNavClick(e, 'how-it-works')} className={styles.navLink}>
+              How it works
             </a>
-            <a href="#datasources" onClick={(e) => handleNavClick(e, 'datasources')} className={styles.navLink}>
-              Data Sources
+            <a href="#why-cira" onClick={(e) => handleNavClick(e, 'why-cira')} className={styles.navLink}>
+              Why Cira
             </a>
             <a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className={styles.navLink}>
               FAQ
@@ -98,10 +105,11 @@ export default function Header({ showAuthButtons = true, showUserMenu = false, s
               {currentTeamId && ` | team_id: ${currentTeamId}`}
             </span>
           )}
-          {/* These buttons always show, regardless of auth state */}
-          <button className={styles.enterpriseButton} onClick={handleGoToEnterprise}>
-            Go to Enterprise Version
-          </button>
+          {!hideEnterpriseButton && (
+            <button className={styles.enterpriseButton} onClick={handleGoToEnterprise}>
+              Go to Enterprise Version
+            </button>
+          )}
           {!shouldShowUserMenu &&
             <button className={styles.loginButton} onClick={handleLogin}>
               Login / Sign Up

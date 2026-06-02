@@ -1,12 +1,20 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
 import Footer from '@/components/Footer'
 
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
+
 export const metadata: Metadata = {
-  title: 'First PHA Analysis Draft under 30 minutes',
-  description: 'Generate your Preliminary Hazard Analysis quickly and efficiently',
+  title: 'Cira Health — AI hazard analysis for medical devices',
+  description:
+    'Save 40+ hours on ISO 14971 / 24971 risk analysis. Automated MAUDE, FDA, and IMDRF data with traceable, FDA-aligned outputs.',
   icons: {
     icon: '/favicon.ico',
   },
@@ -18,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <head>
         {/* Google Analytics */}
         <Script
@@ -34,7 +42,7 @@ export default function RootLayout({
           `}
         </Script>
       </head>
-      <body>
+      <body className={inter.className}>
         <AuthProvider>
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             {children}

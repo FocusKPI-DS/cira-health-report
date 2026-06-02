@@ -9,7 +9,7 @@ export default function Footer() {
       <div className={styles.footerContainer}>
         <div className={styles.footerContent}>
           <p className={styles.copyright}>
-            © {new Date().getFullYear()} FocusKPI, Inc. All rights reserved.
+            © {new Date().getFullYear()} FocusKPI Inc. All rights reserved. Cira Health is an AI product by FocusKPI.
           </p>
           <div className={styles.footerLinks}>
             <Link href="/license-agreement" className={styles.footerLink}>

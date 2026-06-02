@@ -1,386 +1,366 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import styles from './page.module.css'
 import Header from '@/components/Header'
-import AddDatasourceModal from '@/components/AddDatasourceModal'
-import { LightningIcon, RobotIcon, ChartIcon, ClipboardIcon, TagIcon, RefreshIcon, CheckIcon } from '@/components/Icons'
+import { ClipboardIcon, TagIcon, RefreshIcon, CheckIcon } from '@/components/Icons'
 import { trackEvent } from '@/lib/analytics'
 import { useAuth } from '@/lib/auth'
 
-export default function Home() {
-  const router = useRouter()
-  const [productName, setProductName] = useState('')
-  const [showAddDatasourceModal, setShowAddDatasourceModal] = useState(false)
+const IMSC_CAMPAIGN_END = new Date('2026-06-30T23:59:59')
+const CONTACT_EMAIL = 'info@focuskpi.ai'
+const CONTACT_PHONE = '408-889-1014'
+
+const FAQ_ITEMS = [
+  {
+    question: 'How much time does Cira Health save?',
+    answer:
+      'About 40 hours per analysis versus manual MAUDE work — downloading 500-record batches, pivot tables, and de-duplication. Teams of 3–5 often spend two or more full days by hand; Cira Health completes it in minutes.',
+  },
+  {
+    question: 'Is it only for new products (PHA)?',
+    answer:
+      'No. Cira supports the full product lifecycle: new product PHA, risk file updates as new adverse events emerge, post-market surveillance, and any time you need a current, organized view of hazard data.',
+  },
+  {
+    question: 'Can you customize it for our QMS and workflow?',
+    answer:
+      'Yes — that is our partnership model. We customize data sources (CAPAs, complaints, proprietary databases), workflow steps, output format (ISO 14971 tables, summaries, CSV), and UI. Contact us at info@focuskpi.ai to scope a Statement of Work.',
+  },
+  {
+    question: 'How do we get started after the conference?',
+    answer:
+      'Submit the form on this page with your device name and work email — we will email your free risk report. You can also contact info@focuskpi.ai. After beta, we work with partners to tailor Cira to your QMS, workflow, and product portfolio.',
+  },
+]
+
+function shouldShowImscBanner(searchParams: URLSearchParams): { show: boolean; reason?: 'date' | 'param' } {
+  const source = searchParams.get('source')
+  const imsc = searchParams.get('imsc')
+  if (source === 'imsc' || imsc === '1') {
+    return { show: true, reason: 'param' }
+  }
+  if (new Date() <= IMSC_CAMPAIGN_END) {
+    return { show: true, reason: 'date' }
+  }
+  return { show: false }
+}
+
+function HomeContent() {
+  const searchParams = useSearchParams()
+  const [requestForm, setRequestForm] = useState({ name: '', email: '', device: '' })
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null)
-  const [contactForm, setContactForm] = useState({
-    name: '',
-    email: '',
-    message: ''
-  })
   const { user, isAnonymous } = useAuth()
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState<{ text: string, isError: boolean } | null>(null)
+  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const imscBanner = shouldShowImscBanner(searchParams)
+
+  useEffect(() => {
+    if (imscBanner.show && imscBanner.reason) {
+      trackEvent('landing_imsc_banner_shown', { reason: imscBanner.reason })
+    }
+  }, [imscBanner.show, imscBanner.reason])
+
+  const handleReportRequest = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (productName.trim()) {
-      trackEvent('try_it_for_free', {
-        product_name: productName.trim()
+    setSubmitting(true)
+    setMessage(null)
+
+    const device = requestForm.device.trim()
+    const body = {
+      name: requestForm.name.trim(),
+      email: requestForm.email.trim(),
+      message: [
+        'Free medical device risk report request (landing page).',
+        `Device: ${device}`,
+        `Reply-to email: ${requestForm.email.trim()}`,
+        imscBanner.show ? 'Source: IMSC / conference' : null,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
+      const token = user ? await user.getIdToken() : null
+
+      const response = await fetch(`${apiUrl}/api/v1/anonclient/contactus/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
       })
-      
-      router.push(`/generate?productName=${encodeURIComponent(productName)}`)
+
+      if (response.ok) {
+        trackEvent('booth_report_request', { device: device || undefined })
+        setMessage({
+          text: 'Thank you — we will email your free risk report shortly.',
+          isError: false,
+        })
+        setRequestForm({ name: '', email: '', device: '' })
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        setMessage({
+          text: `Failed to submit: ${errorData.detail || 'Please try again.'}`,
+          isError: true,
+        })
+      }
+    } catch {
+      setMessage({
+        text: 'An error occurred. Please try again or email info@focuskpi.ai.',
+        isError: true,
+      })
+    } finally {
+      setSubmitting(false)
+      setTimeout(() => setMessage(null), 6000)
     }
   }
 
-  const handleLogin = () => {
-    // Navigate to login or show login modal
-    router.push('/login')
-  }
-
-  // Add styles for success and error messages
-  const messageStyle = (isError: boolean): React.CSSProperties => ({
-    backgroundColor: isError ? '#f8d7da' : '#d4edda',
-    color: isError ? '#721c24' : '#155724',
-    padding: '10px',
-    borderRadius: '5px',
-    marginTop: '10px',
-    textAlign: 'center' as const,
-  })
-
   return (
-    <main className={styles.main} style={{ flex: 1 }}>
-      <Header 
-        showAuthButtons={!user || isAnonymous} 
-        showUserMenu={!!(user && !isAnonymous)} 
+    <main className={styles.main}>
+      <Header
+        showAuthButtons={!user || isAnonymous}
+        showUserMenu={!!(user && !isAnonymous)}
+        showNavMenu
+        hideEnterpriseButton
       />
-      <div id="hero" className={styles.hero}>
+
+      <section id="hero" className={styles.hero}>
         <div className={styles.heroContent}>
-          <h1 className={styles.title}>
-            Get Your First PHA Analysis Draft<br />
-            <span className={styles.highlight}>In 30 Seconds </span>
+          <div className={styles.heroBadges}>
+            {imscBanner.show && (
+              <p className={styles.imscBanner}>
+                IMSC attendees — free report as at our booth
+              </p>
+            )}
+            <p className={styles.eyebrow}>
+              ISO 14971 / 24971 aligned
+            </p>
+          </div>
+
+          <h1 className={styles.heroHeadline}>
+            <span className={styles.statNumber}>40+</span> hours of risk analysis saved
           </h1>
           <p className={styles.subtitle}>
-            Streamline your Preliminary Hazard Analysis with AI-powered insights.<br />
-            Generate comprehensive reports quickly and efficiently.
+            Full product lifecycle — PHA, risk file updates, and post-market surveillance
           </p>
-          <form onSubmit={handleSubmit} className={styles.ctaForm}>
-            <input
-              id="productName"
-              type="text"
-              value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-              className={styles.productInput}
-              placeholder="Enter your device name"
-              required
-            />
-            <button type="submit" className={styles.ctaButton}>
-              Try It for Free
-              <span className={styles.arrow}>→</span>
-            </button>
-          </form>
-          
-          <div className={styles.features}>
-            <div className={styles.feature}>
-              <div className={styles.featureIcon}>
-                <LightningIcon />
-              </div>
-              <div className={styles.featureText}>Fast Analysis</div>
-            </div>
-            <div className={styles.feature}>
-              <div className={styles.featureIcon}>
-                <RobotIcon />
-              </div>
-              <div className={styles.featureText}>AI-Powered</div>
-            </div>
-            <div className={styles.feature}>
-              <div className={styles.featureIcon}>
-                <ChartIcon />
-              </div>
-              <div className={styles.featureText}>FDA Compliant</div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div id="datasources" className={styles.datasourceSection}>
-        <div className={styles.datasourceContainer}>
-          <div className={styles.datasourceHeader}>
-            <h2 className={styles.datasourceTitle}>Connected Data Sources</h2>
-            <p className={styles.datasourceDescription}>
-              Real-time access to comprehensive FDA databases
+          <div className={styles.ctaBlock}>
+            <p className={styles.ctaLabel}>Request your free medical device risk report</p>
+            <p className={styles.ctaHint}>
+              Share your details below — we&apos;ll run the analysis and email your report.
             </p>
-            
-            <button 
-              className={styles.addDatasourceButton}
-              onClick={() => {
-                trackEvent('click_add_datasource', {
-                  page: 'home'
-                })
-                setShowAddDatasourceModal(true)
-              }}
-            >
-              Add Datasource
-            </button>
-          </div>
-          
-          <div className={styles.datasourceCard}>
-            <div className={styles.datasourceCardHeader}>
-              <div className={styles.fdaBadge}>FDA</div>
-              <span className={styles.connectedStatus}>
-                <span className={styles.statusDot}></span>
-                Connected
-              </span>
-            </div>
-            <div className={styles.datasourceList}>
-              <div className={styles.datasourceItem}>
-                <div className={styles.itemIcon}>
-                  <ClipboardIcon />
-                </div>
-                <div className={styles.itemContent}>
-                  <div className={styles.itemTitle}>MAUDE Database</div>
-                  <div className={styles.itemDesc}>Manufacturer and User Facility Device Experience</div>
-                </div>
-              </div>
-              <div className={styles.datasourceItem}>
-                <div className={styles.itemIcon}>
-                  <TagIcon />
-                </div>
-                <div className={styles.itemContent}>
-                  <div className={styles.itemTitle}>Device Classification</div>
-                  <div className={styles.itemDesc}>Comprehensive device categorization</div>
-                </div>
-              </div>
-              <div className={styles.datasourceItem}>
-                <div className={styles.itemIcon}>
-                  <RefreshIcon />
-                </div>
-                <div className={styles.itemContent}>
-                  <div className={styles.itemTitle}>Total Product Life Cycle</div>
-                  <div className={styles.itemDesc}>Complete product lifecycle tracking</div>
-                </div>
-              </div>
-              <div className={styles.datasourceItem}>
-                <div className={styles.itemIcon}>
-                  <CheckIcon />
-                </div>
-                <div className={styles.itemContent}>
-                  <div className={styles.itemTitle}>510(k) Clearances</div>
-                  <div className={styles.itemDesc}>Pre-market notification database</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="faq" className={styles.faqSection}>
-        <div className={styles.faqContainer}>
-          <h2 className={styles.faqTitle}>Frequently Asked Questions</h2>
-          <p className={styles.faqDescription}>
-            Everything you need to know about PHA Analysis
-          </p>
-          
-          <div className={styles.faqList}>
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 0 ? null : 0)}
-              >
-                <span>What is a Preliminary Hazard Analysis (PHA)?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 0 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 0 && (
-                <div className={styles.faqAnswer}>
-                  A Preliminary Hazard Analysis (PHA) is a systematic evaluation of potential hazards associated with industrial processes. It helps identify and assess risks, ensuring compliance with safety regulations and FDA requirements for medical devices.
-                </div>
-              )}
-            </div>
-
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 1 ? null : 1)}
-              >
-                <span>How long does it take to generate a PHA report?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 1 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 1 && (
-                <div className={styles.faqAnswer}>
-                  Our AI-powered platform can generate a comprehensive PHA analysis draft in just 30 seconds. You can then review, edit, and refine the report to meet your specific requirements.
-                </div>
-              )}
-            </div>
-
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 2 ? null : 2)}
-              >
-                <span>What data sources does the platform use?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 2 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 2 && (
-                <div className={styles.faqAnswer}>
-                  We integrate with comprehensive FDA databases including MAUDE (Manufacturer and User Facility Device Experience), Device Classification, Total Product Life Cycle (TPLC), and 510(k) Clearances to provide accurate and up-to-date information.
-                </div>
-              )}
-            </div>
-
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 3 ? null : 3)}
-              >
-                <span>Is the generated report FDA compliant?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 3 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 3 && (
-                <div className={styles.faqAnswer}>
-                  Yes, our reports are designed to meet FDA compliance requirements. The platform uses FDA-approved data sources and follows industry-standard PHA methodologies. However, we recommend having your quality assurance team review the final report.
-                </div>
-              )}
-            </div>
-
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
-              >
-                <span>Can I customize the generated reports?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 4 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 4 && (
-                <div className={styles.faqAnswer}>
-                  Yes! While you cannot edit reports directly in the platform, you can export the generated reports to Excel format. Once exported, you can modify, add, or remove sections using your own tools to match your specific needs and company standards.
-                </div>
-              )}
-            </div>
-
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 5 ? null : 5)}
-              >
-                <span>Do I need to create an account to use the service?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 5 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 5 && (
-                <div className={styles.faqAnswer}>
-                  You can try the service for free without creating an account. However, creating an account allows you to save your reports, access your history, and enjoy additional features for managing multiple analyses.
-                </div>
-              )}
-            </div>
-
-            <div className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => setOpenFaqIndex(openFaqIndex === 6 ? null : 6)}
-              >
-                <span>Can I connect other datasources?</span>
-                <span className={styles.faqIcon}>{openFaqIndex === 6 ? '−' : '+'}</span>
-              </button>
-              {openFaqIndex === 6 && (
-                <div className={styles.faqAnswer}>
-                  Yes! If you'd like to connect additional datasources beyond the current FDA databases, you can submit a request through the "Add Datasource" form on the homepage or contact us directly at cirahealth@focuskpi.com. We'll work with you to integrate your preferred data sources.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="contact" className={styles.contactSection}>
-        <div className={styles.contactContainer}>
-          <h2 className={styles.contactTitle}>Contact Us</h2>
-          <p className={styles.contactDescription}>
-            Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
-          </p>
-          <div className={styles.contactEmail}>
-            <span className={styles.contactEmailLabel}>Email:</span>
-            <a href="mailto:cirahealth@focuskpi.com" className={styles.contactEmailLink}>cirahealth@focuskpi.com</a>
-          </div>
-          
-          <div className={styles.contactContent}>
-            <form className={styles.contactForm} onSubmit={async (e) => {
-              e.preventDefault()
-              setSubmitting(true)
-              setMessage(null)
-
-              try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'
-                const token = user ? await user.getIdToken() : null
-
-                const response = await fetch(`${apiUrl}/api/v1/anonclient/contactus/add`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                  },
-                  body: JSON.stringify(contactForm)
-                })
-
-                if (response.ok) {
-                  setMessage({ text: 'Thank you for your message! We will get back to you soon.', isError: false })
-                  setContactForm({ name: '', email: '', message: '' })
-                } else {
-                  const errorData = await response.json()
-                  setMessage({ text: `Failed to submit: ${errorData.detail}`, isError: true })
-                }
-              } catch (error) {
-                setMessage({ text: 'An error occurred while submitting your message. Please try again later.', isError: true })
-              } finally {
-                setSubmitting(false)
-                setTimeout(() => setMessage(null), 5000)
-              }
-            }}>
-              <div className={styles.formGroup}>
-                <input
-                  type="text"
-                  id="name"
-                  className={styles.formInput}
-                  value={contactForm.name}
-                  onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className={styles.formGroup}>
-                <input
-                  type="email"
-                  id="email"
-                  className={styles.formInput}
-                  value={contactForm.email}
-                  onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                  required
-                />
-              </div>
-              <div className={styles.formGroup}>
-                <textarea
-                  id="message"
-                  className={styles.formTextarea}
-                  rows={5}
-                  value={contactForm.message}
-                  onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                  required
-                />
-              </div>
-              {message && (
-                <div style={messageStyle(message.isError)}>{message.text}</div>
-              )}
-              <button type="submit" className={styles.contactSubmitButton} disabled={submitting}>
-                {submitting ? 'Submitting' : 'Send Message'}
+            <form onSubmit={handleReportRequest} className={styles.requestForm}>
+              <input
+                type="text"
+                value={requestForm.name}
+                onChange={(e) => setRequestForm({ ...requestForm, name: e.target.value })}
+                className={styles.formInput}
+                placeholder="Name"
+                required
+              />
+              <input
+                type="email"
+                value={requestForm.email}
+                onChange={(e) => setRequestForm({ ...requestForm, email: e.target.value })}
+                className={styles.formInput}
+                placeholder="Work email"
+                required
+              />
+              <input
+                type="text"
+                value={requestForm.device}
+                onChange={(e) => setRequestForm({ ...requestForm, device: e.target.value })}
+                className={styles.formInput}
+                placeholder="Device / product name"
+                required
+              />
+              <button type="submit" className={styles.ctaButton} disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Request my free report'}
+                {!submitting && <span className={styles.arrow}>→</span>}
               </button>
             </form>
+            {message && (
+              <div
+                className={`${styles.feedback} ${message.isError ? styles.feedbackError : styles.feedbackSuccess}`}
+              >
+                {message.text}
+              </div>
+            )}
+          </div>
+
+          <div id="how-it-works" className={styles.pillars}>
+            <article className={styles.pillar}>
+              <div className={styles.pillarHead}>
+                <div className={styles.pillarIcon}>
+                  <RefreshIcon />
+                </div>
+                <h3 className={styles.pillarTitle}>Retrieve</h3>
+              </div>
+              <p className={styles.pillarDesc}>
+                Pull MAUDE, FDA code sets, and IMDRF automatically — no manual compiling.
+              </p>
+            </article>
+            <article className={styles.pillar}>
+              <div className={styles.pillarHead}>
+                <div className={styles.pillarIcon}>
+                  <ClipboardIcon />
+                </div>
+                <h3 className={styles.pillarTitle}>Summarize</h3>
+              </div>
+              <p className={styles.pillarDesc}>
+                AI summarizes evidence and ranks risks with traceable sources.
+              </p>
+            </article>
+            <article className={styles.pillar}>
+              <div className={styles.pillarHead}>
+                <div className={styles.pillarIcon}>
+                  <CheckIcon />
+                </div>
+                <h3 className={styles.pillarTitle}>Output</h3>
+              </div>
+              <p className={styles.pillarDesc}>
+                FDA-aligned severity assessments, ready for your risk file.
+              </p>
+            </article>
+          </div>
+
+          <p className={styles.trustStrip}>
+            Co-developed with regulatory domain experts · AI product developed by FocusKPI
+          </p>
+        </div>
+      </section>
+
+      <section id="why-cira" className={styles.compareSection}>
+        <div className={styles.sectionInner}>
+          <span className={styles.sectionKicker}>Compare</span>
+          <h2 className={styles.sectionTitle}>Why Cira Health — not general AI</h2>
+          <p className={styles.sectionDesc}>
+            General tools lack comprehensive FDA/IMDRF access and regulatory domain expertise for ISO 14971-ready outputs.
+          </p>
+          <div className={styles.compareGrid}>
+            <div className={`${styles.compareCard} ${styles.compareMuted}`}>
+              <h3>General AI (e.g. ChatGPT)</h3>
+              <ul className={styles.compareList}>
+                <li>No direct MAUDE or IMDRF database access</li>
+                <li>Manual paste-in; no traceability to source records</li>
+                <li>Limited RA/QA framing for hazardous situations and severity</li>
+              </ul>
+            </div>
+            <div className={`${styles.compareCard} ${styles.compareHighlight}`}>
+              <h3>Cira Health</h3>
+              <ul className={styles.compareList}>
+                <li>Automated MAUDE, FDA code sets, and IMDRF</li>
+                <li>Evidence ranked and traceable to source data</li>
+                <li>Co-developed with RA/QA experts for ISO 14971 / 24971 workflows</li>
+              </ul>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <AddDatasourceModal
-        isOpen={showAddDatasourceModal}
-        onClose={() => setShowAddDatasourceModal(false)}
-      />
+      <section id="data-sources" className={styles.sourcesSection}>
+        <div className={styles.sectionInner}>
+          <span className={styles.sectionKicker}>Integrations</span>
+          <h2 className={styles.sectionTitle}>Data sources</h2>
+          <p className={styles.sectionDesc}>
+            Three primary public sources, with optional custom sources via partnership.
+          </p>
+          <div className={styles.sourcesGrid}>
+            <div className={styles.sourceCard}>
+              <div className={styles.sourceIcon}>
+                <ClipboardIcon />
+              </div>
+              <h3>FDA MAUDE</h3>
+              <p>Full narrative medical device reports — manufacturer and user facility experience.</p>
+            </div>
+            <div className={styles.sourceCard}>
+              <div className={styles.sourceIcon}>
+                <TagIcon />
+              </div>
+              <h3>FDA adverse event code sets</h3>
+              <p>Device problem, patient problem, and product codes for structured analysis.</p>
+            </div>
+            <div className={styles.sourceCard}>
+              <div className={styles.sourceIcon}>
+                <RefreshIcon />
+              </div>
+              <h3>IMDRF terminology</h3>
+              <p>Harmonized terminology for international market alignment.</p>
+            </div>
+          </div>
+          <p className={styles.sourcesNote}>
+            Need CAPAs, complaints, or proprietary databases?{' '}
+            <a href={`mailto:${CONTACT_EMAIL}`}>Contact us</a> for customization add-ons.
+          </p>
+        </div>
+      </section>
+
+      <section id="faq" className={styles.faqSection}>
+        <div className={styles.sectionInnerNarrow}>
+          <span className={styles.sectionKicker}>Support</span>
+          <h2 className={styles.sectionTitle}>Frequently asked questions</h2>
+          <div className={styles.faqList}>
+            {FAQ_ITEMS.map((item, index) => (
+              <div
+                key={item.question}
+                className={`${styles.faqItem} ${openFaqIndex === index ? styles.faqItemOpen : ''}`}
+              >
+                <button
+                  type="button"
+                  className={styles.faqQuestion}
+                  onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                >
+                  <span>{item.question}</span>
+                  <span className={styles.faqIcon}>{openFaqIndex === index ? '−' : '+'}</span>
+                </button>
+                {openFaqIndex === index && <div className={styles.faqAnswer}>{item.answer}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" className={styles.contactSection}>
+        <div className={styles.sectionInnerNarrow}>
+          <div className={styles.contactCard}>
+            <span className={styles.sectionKicker}>Get in touch</span>
+            <h2 className={styles.sectionTitle}>Contact us</h2>
+            <p className={styles.contactLead}>
+              Partnership and customization · free risk reports for qualified devices
+            </p>
+            <div className={styles.contactDetails}>
+              <a href={`mailto:${CONTACT_EMAIL}`} className={styles.contactLink}>
+                {CONTACT_EMAIL}
+              </a>
+              <a href={`tel:${CONTACT_PHONE.replace(/[^\d+]/g, '')}`} className={styles.contactLink}>
+                {CONTACT_PHONE}
+              </a>
+            </div>
+            <p className={styles.customizationNote}>Customization add-ons available</p>
+          </div>
+        </div>
+      </section>
     </main>
   )
 }
 
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <main className={styles.main}>
+          <div className={styles.hero}>
+            <div className={styles.heroContent}>Loading…</div>
+          </div>
+        </main>
+      }
+    >
+      <HomeContent />
+    </Suspense>
+  )
+}
